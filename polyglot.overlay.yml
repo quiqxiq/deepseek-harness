@@ -1,0 +1,8 @@
+# Connect to Polyglot Go backend MCP server via streamable-http
+- insert:
+    - id: mcp-polyglot
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: polyglot
+        transport: streamable-http
+        url: !!js process.env.POLYGLOT_MCP_URL || 'http://localhost:8080/mcp'
