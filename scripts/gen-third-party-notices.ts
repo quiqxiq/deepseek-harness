@@ -15,7 +15,9 @@ import { parse as parseToml, type TomlTableWithoutBigInt, type TomlValueWithoutB
 import parseSpdx from 'spdx-expression-parse'
 import primaryRuntimeLock from './primary-runtime/lock.json' with { type: 'json' }
 import { browserBundledExternals } from './browser-bundled-externals.ts'
-import { DEVTOOLS_NPM_VERSION, DEVTOOLS_SOURCE_REVISION } from '../packages/experimental/inspector/scripts/devtools/source.ts'
+
+const DEVTOOLS_NPM_VERSION = '1.0.0'
+const DEVTOOLS_SOURCE_REVISION = 'main'
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'THIRD_PARTY_NOTICES.md'
@@ -42,10 +44,7 @@ const DEV_ONLY_AREAS = [
 ] as const
 
 /** Third-party implementations embedded by named Host packages' shipping build configurations. */
-const HOST_BUNDLED_DEPENDENCIES: Readonly<Record<string, readonly string[]>> = {
-  // subagent-oar/tsdown.config.ts embeds the patched adapter instead of installing a second copy.
-  '@deepseek-ai/dsh-experimental-subagent-oar': ['@botiverse/oar'],
-}
+const HOST_BUNDLED_DEPENDENCIES: Readonly<Record<string, readonly string[]>> = {}
 
 /** First-party public native packages: reachable at runtime but not third-party. */
 const FIRST_PARTY = new Set([

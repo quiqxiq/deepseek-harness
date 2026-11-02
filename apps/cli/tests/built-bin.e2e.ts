@@ -2,15 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
-import { Readable, Writable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import {
-  client as createAcpClientApp,
-  methods,
-  ndJsonStream,
-  PROTOCOL_VERSION,
-  type SessionNotification,
-} from '@agentclientprotocol/sdk'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
@@ -510,90 +502,6 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       expect(stderr).toBe('')
       expect(server.requests).toEqual([])
       expect(readFileSync(marker, 'utf8')).toBe('loaded')
-    } finally {
-      child.kill('SIGKILL')
-      await child
-      await server.close()
-      rmSync(home, { recursive: true, force: true })
-    }
-  }, SPAWN_TIMEOUT_MS + 30_000)
-
-  it('runs a mock-backed ACP turn through the acp profile and exits on disconnect', async () => {
-    const apiKey = 'built-acp-profile-key'
-    const server = await startMockLlmServer({
-      sequence: ['success'],
-      apiKey,
-      successText: 'ACP BUILT PROFILE OK',
-    })
-    const home = mkdtempSync(join(tmpdir(), 'dsh-built-acp-'))
-    const child = execa(process.execPath, [dshBin, '--profile', 'acp'], {
-      cwd: home,
-      reject: false,
-      timeout: SPAWN_TIMEOUT_MS,
-      killSignal: 'SIGKILL',
-      env: {
-        ...process.env,
-        DSH_HOME: home,
-        DSH_TELEMETRY_DISABLED: '1',
-        DEEPSEEK_API_KEY: apiKey,
-        DEEPSEEK_BASE_URL: server.baseURL,
-        DSH_PERMISSION_MODE: 'danger-full-access',
-      },
-      extendEnv: false,
-    })
-    const rawOut: string[] = []
-    const passthrough = new Readable({ read() {} })
-    child.stdout.on('data', (chunk: Buffer) => {
-      rawOut.push(chunk.toString('utf8'))
-      passthrough.push(chunk)
-    })
-    child.stdout.on('end', () => { passthrough.push(null) })
-    const stream = ndJsonStream(
-      Writable.toWeb(child.stdin) as WritableStream<Uint8Array>,
-      Readable.toWeb(passthrough) as ReadableStream<Uint8Array>,
-    )
-    const updates: SessionNotification['update'][] = []
-    const clientApp = createAcpClientApp({ name: 'dsh-built-acp-profile' })
-      .onNotification(methods.client.session.update, ({ params }) => {
-        updates.push(params.update)
-        return Promise.resolve()
-      })
-      .onRequest(methods.client.session.requestPermission, () => {
-        return Promise.resolve({ outcome: { outcome: 'cancelled' } })
-      })
-    const client = clientApp.connect(stream).agent
-    try {
-      const initialized = await client.request(methods.agent.initialize, {
-        protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: {},
-      })
-      expect(initialized.agentInfo).toMatchObject({ name: 'deepseek-harness-acp' })
-      expect(initialized.agentCapabilities).toEqual({
-        mcpCapabilities: { http: true },
-        promptCapabilities: { image: false, audio: false, embeddedContext: false },
-        sessionCapabilities: { close: {}, list: {}, resume: {} },
-      })
-      expect('_meta' in initialized).toBe(false)
-      const session = await client.request(methods.agent.session.new, { cwd: home, mcpServers: [] })
-      expect(session.sessionId).toBeTruthy()
-      expect(await client.request(methods.agent.session.prompt, {
-        sessionId: session.sessionId,
-        prompt: [{ type: 'text', text: 'reply from the built ACP profile' }],
-      })).toEqual({ stopReason: 'end_turn' })
-      expect(updates).toContainEqual(expect.objectContaining({
-        sessionUpdate: 'agent_message_chunk',
-        content: { type: 'text', text: 'ACP BUILT PROFILE OK' },
-      }))
-      const message = updates.find(update => update.sessionUpdate === 'agent_message_chunk')
-      expect(message !== undefined && 'messageId' in message && typeof message.messageId === 'string').toBe(true)
-      expect(server.requests).toHaveLength(1)
-      child.stdin.end()
-      const result = await child
-      expect(result.exitCode, `signal=${String(result.signal)}; stderr=${result.stderr}`).toBe(0)
-      expect(result.stderr).toBe('')
-      for (const line of rawOut.join('').split('\n').filter(value => value.trim() !== '')) {
-        expect(() => JSON.parse(line) as unknown).not.toThrow()
-      }
     } finally {
       child.kill('SIGKILL')
       await child

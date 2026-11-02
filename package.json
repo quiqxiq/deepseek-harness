@@ -191,19 +191,13 @@
     "verify-product-use": "tsx scripts/verify-product-use.ts"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-hooks-claude-code": "workspace:*",
-    "@deepseek-ai/dsh-hooks-codex": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
-    "@deepseek-ai/dsh-tool-ralph": "workspace:*",
-    "@deepseek-ai/dsh-tool-terminal": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
-    "@deepseek-ai/dsh-experimental-claude-code-mods": "workspace:*",
     "@deepseek-ai/dsh-llm-replay": "workspace:*",
     "@deepseek-ai/dsh-subagent-dsh-sdk": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-mcp-client": "workspace:*",
-    "@deepseek-ai/dsh-tool-session-query": "workspace:*",
     "@deepseek-ai/dsh-web-fetch-http": "workspace:*",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@testing-library/dom": "^10.4.1",
@@ -254,14 +248,6 @@
     "@deepseek-ai/dsh-skill-office": "workspace:*",
     "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*",
     "@deepseek-ai/dsh-tool-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
-    "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
-    "@deepseek-ai/dsh-experimental-subagent-oar": "workspace:*",
-    "@deepseek-ai/dsh-experimental-tool-subagent-oar": "workspace:*",
-    "@deepseek-ai/dsh-experimental-forge": "workspace:*",
-    "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
-    "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
-    "@deepseek-ai/dsh-action-cards": "workspace:*"
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   }
 }

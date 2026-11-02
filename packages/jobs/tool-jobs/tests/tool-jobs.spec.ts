@@ -22,6 +22,7 @@ import { publicJob, renderModelDelta, statusLine } from '../src/render.ts'
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
     'test-task': 'test-task'
+    'pty-send': 'pty-send'
   }
 }
 

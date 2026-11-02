@@ -9,7 +9,10 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatSessionReferenceMention } from '@deepseek-ai/dsh-session-reference'
-import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives'
+
+function formatQuoteText(text: string): string {
+  return text.replace(/\r\n?/gu, '\n').split('\n').map(line => `> ${line}`).join('\n')
+}
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, launchWebScaffold,
   parseSeedFixture, renderSeedFixture, seedSession, selectedSessionFixture, watchConsole, webSnapshotMode,

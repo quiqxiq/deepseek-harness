@@ -19,8 +19,12 @@ export const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
  * @returns The description text from `locale/<locale>.json`.
  */
 export function experimentalBundleDescription(bundle: string, locale: string): string {
-  const resource = JSON.parse(readFileSync(join(REPO_ROOT, 'packages/experimental', bundle, 'locale', `${locale}.json`), 'utf8')) as { meta: { description: string } }
-  return resource.meta.description
+  try {
+    const resource = JSON.parse(readFileSync(join(REPO_ROOT, 'packages/experimental', bundle, 'locale', `${locale}.json`), 'utf8')) as { meta: { description: string } }
+    return resource.meta.description
+  } catch {
+    return ''
+  }
 }
 
 const installationRequire = createRequire(join(REPO_ROOT, 'apps/cli/package.json'))

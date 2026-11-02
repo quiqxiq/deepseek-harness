@@ -13,10 +13,8 @@ import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { createScope } from '@deepseek-ai/dsh-scope'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import SqliteSessionQueryEngine from '@deepseek-ai/dsh-session-query-sqlite'
 import GoalService from '@deepseek-ai/dsh-goal'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -31,7 +29,6 @@ import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import * as ToolWorkingDirectory from '@deepseek-ai/dsh-tool-working-directory'
-import * as ToolWorktree from '@deepseek-ai/dsh-experimental-tool-worktree'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
@@ -43,8 +40,6 @@ import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import ActionCards from '@deepseek-ai/dsh-action-cards'
-import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
@@ -59,17 +54,11 @@ import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
-import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
 import * as ToolSchedule from '@deepseek-ai/dsh-tool-schedule'
 import ScheduleService from '@deepseek-ai/dsh-schedule'
-import Lsp from '@deepseek-ai/dsh-lsp'
-import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
-import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
-import type TeamService from '@deepseek-ai/dsh-experimental-agent-team'
-import * as ToolTeam from '@deepseek-ai/dsh-experimental-tool-agent-team'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import type PluginManager from '@deepseek-ai/dsh-plugin-manager'
 import * as PluginManagerTools from '@deepseek-ai/dsh-plugin-manager/tools'
@@ -78,11 +67,9 @@ import * as PluginMarketTools from '@deepseek-ai/dsh-plugin-market/tools'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
-import * as ToolSubagentOar from '@deepseek-ai/dsh-experimental-tool-subagent-oar'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import WorkflowEngine from '@deepseek-ai/dsh-workflow'
 import type { WorkflowRun, WorkflowStartRequest } from '@deepseek-ai/dsh-workflow'
-import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
 import * as ToolWorkspaceDependencies from '@deepseek-ai/dsh-tool-workspace-dependencies'
 import { githubSlug } from './verify-md-links.ts'
@@ -138,9 +125,6 @@ function registerCatalogSubagentProvider(ctx: Context, name: string): void {
   }
   ctx.subagents.registerProvider(provider)
 }
-
-/** Minted child-scope keys for packages whose tools are never global. */
-const catalogChildScopes = new WeakMap<Context, Agent>()
 
 /**
  * Tool package plus its hand-maintained boot recipe. The caller mounts the
@@ -224,19 +208,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
         request: () => Promise.reject(new Error('gen-tool-catalog: MCP requests are unreachable during schema harvest')),
       })
     },
-  },
-  {
-    pkg: '@deepseek-ai/dsh-action-cards',
-    dir: 'action-cards',
-    source: 'packages/experimental/action-cards/src/index.ts',
-    requires: ['ctx.tools', 'ctx.agents', 'ctx.sessionProjections', 'ctx.remoteAccess'],
-    writes: ['tool/call', 'tool/result', 'plugin:action-cards/decision', 'user/message'],
-    async mount(ctx) {
-      await ctx.plugin(AgentRegistry)
-      await ctx.plugin(RemoteAccess)
-      await ctx.plugin(ActionCards)
-    },
-    note: 'Declared only to an Agent that loaded the skill of a registered card kind; the kind packages register their actions, and the Personalized recommendations bundle supplies the shipped kinds.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
@@ -415,19 +386,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-terminal',
-    dir: 'tool-terminal',
-    source: 'packages/experimental/tool-terminal/src/index.ts',
-    requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.terminals', 'ctx.systemPrompt', 'ctx.jobs at call time for run_in_background'],
-    writes: ['tool/call', 'tool/result'],
-    async mount(ctx) {
-      await ctx.plugin(TerminalSessionService)
-      await ctx.plugin(ToolPty)
-    },
-    note:
-      'The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema.',
-  },
-  {
     pkg: '@deepseek-ai/dsh-tool-goal',
     dir: 'tool-goal',
     source: 'packages/goal/tool-goal/src/index.ts',
@@ -462,35 +420,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
       + 'Delegated subagents cannot call these tools.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-lsp',
-    dir: 'tool-lsp',
-    source: 'packages/lsp/tool-lsp/src/index.ts',
-    requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.lsp', 'ctx.systemPrompt'],
-    writes: ['tool/call', 'tool/result'],
-    async mount(ctx) {
-      // The tool registers from the seam alone; the schema does not depend on any provider.
-      await ctx.plugin(Lsp)
-      await ctx.plugin(ToolLsp)
-    },
-    note:
-      'The lsp tool keeps provider selection and language-server subprocesses behind ctx.lsp, so its model-visible schema stays stable across providers. Requires a registered provider (e.g. `@deepseek-ai/dsh-lsp-stdio`) at runtime; without one, a query returns the structured `LSP_UNAVAILABLE` error rather than changing the schema.',
-  },
-  {
-    pkg: '@deepseek-ai/dsh-tool-ralph',
-    dir: 'tool-ralph',
-    source: 'packages/experimental/tool-ralph/src/index.ts',
-    requires: ['ctx.tools', 'ctx.workflowEngine', 'ctx.subagents', 'ctx.systemPrompt', 'a calling Agent (exec.agent parents every fresh round)'],
-    writes: ['tool/call', 'tool/result', 'workflow and child session events during execution'],
-    async mount(ctx) {
-      await ctx.plugin(SubagentRuntime)
-      registerCatalogSubagentProvider(ctx, 'mock')
-      await ctx.plugin(CatalogWorkflowEngine)
-      await ctx.plugin(ToolRalph, { subagentProvider: 'mock' })
-    },
-    note:
-      'A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap.',
-  },
-  {
     pkg: '@deepseek-ai/dsh-tool-skill',
     dir: 'tool-skill',
     source: 'packages/skill/tool-skill/src/index.ts',
@@ -505,35 +434,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
       })
       await ctx.plugin(ToolSkill)
     },
-  },
-  {
-    pkg: '@deepseek-ai/dsh-tool-session-query',
-    dir: 'tool-session-query',
-    source: 'packages/experimental/tool-session-query/src/index.ts',
-    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.sessionQuery', 'ctx.agents', 'a calling Agent for workspace authority'],
-    writes: ['tool/call', 'tool/result'],
-    async mount(ctx) {
-      await ctx.plugin(SessionStore)
-      await ctx.plugin(AgentRegistry)
-      await ctx.plugin(SqliteSessionQueryEngine, { path: ':memory:' })
-      await ctx.plugin(ToolSessionQuery)
-    },
-    note:
-      'The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies.',
-  },
-  {
-    pkg: '@deepseek-ai/dsh-experimental-tool-subagent-oar',
-    dir: 'tool-subagent-oar',
-    source: 'packages/experimental/tool-subagent-oar/src/index.ts',
-    requires: ['ctx.tools', 'ctx.subagents'],
-    writes: ['tool/call', 'tool/result', 'parent subagent catalog and completion notices'],
-    async mount(ctx) {
-      await ctx.plugin(SubagentRuntime)
-      await ctx.plugin(ToolSubagentOar, {
-        providers: { codex: 'oar-codex', claude: 'oar-claude' },
-      })
-    },
-    note: 'The subagent_oar tool selects among configured aliases for external providers. This catalog shows Codex and Claude Code aliases; each deployment chooses its providers. Native model and permission settings belong to the selected provider configuration.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent',
@@ -588,44 +488,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'The kind-agnostic background-job controller: background bash commands and PTY sends are read, listed, and killed through the same three tools. Loading the plugin attaches the controller that arms producers\' `ctx.jobs.start()`.',
   },
   {
-    pkg: '@deepseek-ai/dsh-experimental-tool-agent-team',
-    dir: 'tool-agent-team',
-    source: 'packages/experimental/tool-agent-team/src/index.ts',
-    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.agentTeams', 'an exact live Team member Agent'],
-    writes: ['tool/call', 'team/member', 'team/task', 'agent/inbox/spliced', 'user/message on inbox claim', 'tool/result'],
-    async mount(ctx) {
-      await ctx.plugin(AgentRegistry)
-      await ctx.plugin(SessionStore)
-      const session = ctx.sessions.create(SessionId('tool-catalog-team-lead'))
-      let agent!: Agent
-      const membership = {
-        get root() { return agent },
-        id: session.id,
-        role: 'lead' as const,
-        name: 'lead',
-      }
-      ctx.provide('agentTeams', {
-        tryMembership: (candidate: Agent) => candidate === agent ? membership : undefined,
-        membership: () => membership,
-      } as unknown as TeamService)
-      await ctx.plugin(Object.assign(async (inner: Context) => {
-        agent = {
-          id: session.id,
-          session,
-          options: {},
-          status: 'idle',
-        } as unknown as Agent
-        Object.assign(agent, { ctx: createScope(inner, agent).ctx })
-        await inner.agents.register(agent)
-      }, { inject: ['tools', 'systemPrompt', 'agents', 'agentTeams'] }))
-      await ctx.plugin(ToolTeam)
-      catalogChildScopes.set(ctx, agent)
-    },
-    scope: ctx => catalogChildScopes.get(ctx) as Agent,
-    note:
-      'All nine tools are scoped to implicit Team Leads and durable teammates. The shipped dsh-base bundle keeps the package disabled; the documented Agent Teams profile patch enables it while disabling the legacy continuable-child control names.',
-  },
-  {
     pkg: '@deepseek-ai/dsh-tool-todo',
     dir: 'tool-todo',
     source: 'packages/todo/tool-todo/src/index.ts',
@@ -647,20 +509,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(ToolWorkingDirectory)
     },
     note: 'Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed.',
-  },
-  {
-    pkg: '@deepseek-ai/dsh-experimental-tool-worktree',
-    dir: 'tool-worktree',
-    source: 'packages/experimental/tool-worktree/src/index.ts',
-    requires: ['ctx.tools', 'ctx.worktrees', 'a calling Agent'],
-    writes: ['tool/call', 'Git branch and checkout', 'working-directory/change', 'tool/result'],
-    async mount(ctx) {
-      ctx.provide('worktrees', {
-        create: () => Promise.reject(new Error('gen-tool-catalog: worktree creation is unavailable during schema harvest')),
-      })
-      await ctx.plugin(ToolWorktree)
-    },
-    note: 'Explicit experimental composition only. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-workflow',

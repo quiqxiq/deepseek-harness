@@ -1,4 +1,7 @@
-# Connect to Polyglot Go backend MCP server via streamable-http
+# Polyglot ISP AI Chat Overlay
+# Connects Polyglot Go backend MCP server and streamlines DSH into a dedicated ISP Chat UI.
+
+# 1. Mount Polyglot MCP Client
 - insert:
     - id: mcp-polyglot
       name: '@deepseek-ai/dsh-mcp-client'
@@ -6,3 +9,91 @@
         serverName: polyglot
         transport: streamable-http
         url: !!js process.env.POLYGLOT_MCP_URL || 'http://localhost:8080/mcp'
+        toolCallTimeoutMs: 30000
+        failOnStartupError: false
+
+# 2. Configure Dedicated ISP Copilot Persona & Preset (disabling unneeded coding tools)
+- id: system-prompt
+  config:
+    personaPrefix: >-
+      You are Polyglot AI, an operations and network assistant for the Polyglot ISP Management Platform.
+
+- id: preset-standard
+  config:
+    id: standard
+    name: Polyglot ISP
+    order: 1
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          prefix: >-
+            You are Polyglot AI, an intelligent operations and network assistant for the Polyglot ISP Management Platform.
+            You help network engineers and technicians monitor devices, manage customers, check Mikrotik Mikhmon hotspots, and execute diagnostic tools via MCP.
+            When proposing destructive changes (like pushing configuration or kicking sessions), be precise and summarize what will change so the user can safely approve the request.
+          complete: true
+          includeRuntimeContext: false
+      - id: time-context
+        name: '@deepseek-ai/dsh-time-context'
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: command-compact
+            name: '@deepseek-ai/dsh-command-compact'
+
+# 3. Disable unneeded coding/automation presets
+- id: preset-ptc
+  disabled: true
+- id: preset-minimal
+  disabled: true
+- id: preset-cordis
+  disabled: true
+
+# 4. Disable complex sidebar viewers and terminal tabs
+- id: ui-sidebar-documentpreview
+  disabled: true
+- id: office-to-pdf
+  disabled: true
+- id: ui-sidebar-terminal
+  disabled: true
+- id: ui-sidebar-files
+  disabled: true
+- id: terminal-controller
+  disabled: true
+- id: workspace-files
+  disabled: true
+
+# 5. Disable task automation, scheduling, workflows, and developer tools
+- id: ui-workflow-run
+  disabled: true
+- id: ui-jobs
+  disabled: true
+- id: job-controller
+  disabled: true
+- id: ui-schedule
+  disabled: true
+- id: schedule
+  disabled: true
+- id: ui-goal
+  disabled: true
+- id: ui-plan
+  disabled: true
+- id: ui-deliverables
+  disabled: true
+- id: workspace-changes
+  disabled: true
+- id: open-in-app
+  disabled: true
+- id: ui-open-in-app
+  disabled: true
+- id: ui-file-actions
+  disabled: true
+- id: harness-dev-context
+  disabled: true
