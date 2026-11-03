@@ -44,13 +44,20 @@ function runPnpm(args: string[], cwd: string, timeout: number): string {
 }
 
 describe('published document preview licenses', () => {
-  it.skipIf(!existsSync(bundlePath))('keeps bundled licenses in the packed lazy chunks', ({ task }) => {
+  it.skipIf(!existsSync(bundlePath))('keeps bundled licenses in the packed lazy chunks', { timeout: 30_000 }, ({ task }) => {
     expect(existsSync(pdfChunkPath)).toBe(true)
     const output = mkdtempSync(join(tmpdir(), 'dsh-document-preview-pack-'))
     try {
-      const packed = JSON.parse(runPnpm([
+      const packedRaw = JSON.parse(runPnpm([
         'pack', '--json', '--pack-destination', output,
-      ], packageRoot, task.timeout)) as { filename: string; files: { path: string }[] }
+      ], packageRoot, task.timeout))
+      const packed = (
+        'files' in packedRaw
+          ? packedRaw
+          : Array.isArray(packedRaw)
+            ? packedRaw[0]
+            : Object.values(packedRaw)[0]
+      ) as { filename: string; files: { path: string }[] }
       expect(packed.files.map(file => file.path)).toContain('lib/client.js')
       expect(packed.files.map(file => file.path)).toContain('lib/client.pdf.js')
       expect(packed.files.map(file => file.path)).toContain('lib/client.frontmatter-fields.js')
