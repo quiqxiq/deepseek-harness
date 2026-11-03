@@ -12,7 +12,7 @@ import { stat } from 'node:fs/promises'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceRecord } from './spec.ts'
-import type { Workspace, WorkspaceId } from './types.ts'
+import type { Workspace, WorkspaceId, WorkspaceTarget } from './types.ts'
 import { realpathNormalize } from './paths.ts'
 
 /** An insertSessionBefore request named a session or anchor not on the account (storage failures stay plain errors). */
@@ -91,6 +91,10 @@ export class WorkspaceEntity implements Workspace {
     return this.record.title
   }
 
+  get target(): WorkspaceTarget | undefined {
+    return this.record.target
+  }
+
   get createdAt(): string {
     return this.record.createdAt
   }
@@ -105,6 +109,10 @@ export class WorkspaceEntity implements Workspace {
 
   async setTitle(title: string): Promise<void> {
     await this.mutate(record => ({ ...record, title }))
+  }
+
+  async setTarget(target: WorkspaceTarget | undefined): Promise<void> {
+    await this.mutate(record => ({ ...record, target }))
   }
 
   async attachSession(sessionId: SessionId): Promise<void> {

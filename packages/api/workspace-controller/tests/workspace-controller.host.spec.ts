@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -51,7 +51,7 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve }
 }
 
-async function harness(options: { systemDocuments?: boolean } = {}) {
+async function harness(options: { systemDocuments?: boolean; autoCreateDefault?: boolean } = {}) {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-workspace-controller-')))
   tempDirs.push(root)
   const ctx = new Context()
@@ -71,7 +71,10 @@ async function harness(options: { systemDocuments?: boolean } = {}) {
     resources: { register: vi.fn(() => dispose) },
   } as never)
   new RemoteAccessService(ctx)
-  const controller = new WorkspaceController(ctx, options.systemDocuments === true ? {} : { documentsDirectory: root })
+  const autoCreateDefault = options.autoCreateDefault === undefined ? {} : { autoCreateDefault: options.autoCreateDefault }
+  const controller = new WorkspaceController(ctx, options.systemDocuments === true
+    ? autoCreateDefault
+    : { documentsDirectory: root, ...autoCreateDefault })
   return { controller, ctx, root, storageDomain }
 }
 
@@ -135,6 +138,54 @@ describe('WorkspaceController commands', () => {
       created: false,
       workspace: { workspaceId, title: 'renamed' },
     })
+  })
+
+  it('adopts a device target under the Harness home idempotently', async () => {
+    const { controller, root } = await harness()
+    const previous = process.env.DSH_HOME
+    process.env.DSH_HOME = root
+    try {
+      const target = {
+        kind: 'device' as const,
+        deviceId: 'dev-route-1',
+        name: 'Router-Core',
+        vendor: 'MikroTik',
+        host: '10.0.0.1',
+        sshPort: 22,
+      }
+      const created = await controller.create({ target })
+      expect(created.created).toBe(true)
+      expect(created.workspace.target).toEqual(target)
+      expect(created.workspace.title).toBe('Router-Core (MikroTik)')
+      expect(created.workspace.path).toBe(realpathSync.native(join(root, 'devices', 'dev-route-1')))
+      expect(JSON.parse(readFileSync(join(created.workspace.path, 'device.json'), 'utf8'))).toMatchObject({
+        id: 'dev-route-1',
+        title: 'Router-Core (MikroTik)',
+        deviceUri: 'device://dev-route-1',
+        workspaceId: created.workspace.workspaceId,
+      })
+
+      const again = await controller.create({ target })
+      expect(again.created).toBe(false)
+      expect(again.workspace.workspaceId).toBe(created.workspace.workspaceId)
+
+      const refreshed = await controller.create({ target: { ...target, name: 'Router-Core-2' } })
+      expect(refreshed.workspace.target?.name).toBe('Router-Core-2')
+
+      await expect(controller.create({ target: { ...target, deviceId: 'dev-route-2' } })).resolves.toMatchObject({
+        created: true,
+        workspace: { title: 'Router-Core (MikroTik)' },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previous
+    }
+  })
+
+  it('skips first-use Workspace creation when the deployment is device-first', async () => {
+    const { controller, ctx } = await harness({ autoCreateDefault: false })
+    await expect(controller.initializeDefault(new AbortController().signal)).resolves.toBeUndefined()
+    expect(ctx.workspaceRegistry.list()).toEqual([])
   })
 
   it('maps invalid paths, blank names, conflicts, and unknown ids to stable failures', async () => {
@@ -447,7 +498,6 @@ describe('WorkspaceController follow', () => {
 
   it('follows only the Workspaces and Sessions a non-owner may follow', async () => {
     const { controller, ctx, root } = await harness()
-    // oxlint-disable-next-line typescript/unbound-method -- the assertion inspects the spy and never calls it.
     expect(ctx.typert.resources.register).toHaveBeenCalledWith('workspace', { field: 'workspaceId' })
     const shown = await controller.create({ path: stageDir(root, 'shown') })
     const hiddenWorkspace = await controller.create({ path: stageDir(root, 'hidden') })

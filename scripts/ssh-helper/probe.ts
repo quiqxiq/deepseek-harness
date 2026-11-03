@@ -15,6 +15,6 @@ export const helloSchema = z.object({
  * @param _workspace - existing directory supplied for the handshake.
  * @returns the validated handshake after the helper has exited.
  */
-export async function probeHelper(_executable: string, _workspace: string): Promise<z.infer<typeof helloSchema>> {
-  return {}
+export function probeHelper(_executable: string, _workspace: string): Promise<z.infer<typeof helloSchema>> {
+  return Promise.resolve({})
 }

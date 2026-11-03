@@ -6,9 +6,11 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionActivity, WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { SessionActivity, WorkspaceId, WorkspaceTarget } from '@deepseek-ai/dsh-workspace/types'
 
 export type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+export type { WorkspaceTarget } from '@deepseek-ai/dsh-workspace/types'
+export type { WorkspaceTarget as WorkspaceTargetView } from '@deepseek-ai/dsh-workspace/types'
 export type {
   SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap,
 } from '@deepseek-ai/dsh-workspace/types'
@@ -21,6 +23,8 @@ export interface WorkspaceView {
   readonly path: string
   /** User-visible title. */
   readonly title: string
+  /** Device target this workspace operates on; absent for a plain directory workspace. */
+  readonly target?: WorkspaceTarget | undefined
   /** Sessions accounted to this Workspace in manual order. */
   readonly sessionIds: readonly SessionId[]
   /** ISO-8601 creation instant. */
@@ -61,10 +65,20 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
-/** Existing directory requested for Workspace adoption. */
-export interface WorkspaceCreateRequest {
-  readonly path: string
-}
+/** Existing directory or inventory device requested for Workspace adoption; exactly one of `path` or `target` is required. */
+export type WorkspaceCreateRequest =
+  | {
+    /** Existing directory path; used for a plain directory workspace. */
+    readonly path: string
+    readonly target?: undefined
+    readonly title?: string | undefined
+  }
+  | {
+    /** Adopted device target; a device workspace stores its artifacts in a per-device directory. */
+    readonly target: WorkspaceTarget
+    readonly path?: undefined
+    readonly title?: string | undefined
+  }
 
 /** Created or previously registered Workspace. */
 export interface WorkspaceCreateValue {

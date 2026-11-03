@@ -18,6 +18,9 @@
       "path": "../../api/workspace-controller/tsconfig.client.json"
     },
     {
+      "path": "../../api/device-controller/tsconfig.client.json"
+    },
+    {
       "path": "../../api/remote-access/tsconfig.client.json"
     },
     {

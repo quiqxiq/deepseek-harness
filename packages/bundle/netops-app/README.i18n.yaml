@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/bundle/netops-app/README.md
+/:
+  en: 12f14e573159d2de
+  zh: 1cbbd903f9af7cb6
+/deepseek-ai-dsh-netops-app:
+  en: 12498ae8dded33d7
+  zh: 7830ec988540636a
+/deepseek-ai-dsh-netops-app/summary:
+  en: 15281939604b815b
+  zh: cc266e0290c991b1
+/deepseek-ai-dsh-netops-app/table-of-contents:
+  en: 4e53164159b5ce41
+  zh: 89582dc0294d0776
+/deepseek-ai-dsh-netops-app/use-this-package:
+  en: ea84b9ef90198caa
+  zh: 1b34cceb7297f2c0
+/deepseek-ai-dsh-netops-app/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-netops-app/model-experience/device-context:
+  en: bf43e310befcc943
+  zh: 2d6db31e33036c2e
+/deepseek-ai-dsh-netops-app/model-experience/device-context/what-the-model-sees:
+  en: 06502cc9271fb936
+  zh: 162b5b4078854401
+/deepseek-ai-dsh-netops-app/model-experience/device-context/token-effect:
+  en: a7a9ea7bc710e75e
+  zh: a8cb22bc54bd3fec
+/deepseek-ai-dsh-netops-app/model-experience/device-context/kv-cache-effect:
+  en: c534292b8495e3dd
+  zh: 2f9c841b3c9d8cd1
+/deepseek-ai-dsh-netops-app/known-limitations-and-deferred-work:
+  en: b04fe0f21e3d0ae0
+  zh: df2382b0409faf47
+/deepseek-ai-dsh-netops-app/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

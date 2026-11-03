@@ -25,7 +25,10 @@ describe('shipped MCP resource composition', () => {
       expect(rows.filter(row => row.name === resourcePackage)).toEqual([
         { id: 'mcp-resources', name: resourcePackage },
       ])
-      expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-client')).toEqual([])
+      const clients = rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-client')
+      // The netops profile ships one inventory-backed server row; every
+      // upstream profile composes none.
+      expect(clients.map(row => row.id)).toEqual(name === 'netops' ? ['mcp-polyglot', 'mcp-network'] : [])
       expect(warnings).toEqual([])
 
       const owners = profile.layers.filter((layer) => {

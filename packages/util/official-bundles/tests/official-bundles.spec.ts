@@ -5,9 +5,7 @@ import { OFFICIAL_ON_DEMAND_CATALOG, ON_DEMAND_BUNDLES, PROFILE_TEMPLATES } from
 
 describe('Official on-demand catalog', () => {
   it('offers native subagents and default-hidden Computer Use with offline metadata', () => {
-    expect(ON_DEMAND_BUNDLES).toEqual(['@deepseek-ai/dsh-subagent-claude-code', '@deepseek-ai/dsh-subagent-codex', '@deepseek-ai/dsh-cua-bundle'])
-    expect(OFFICIAL_ON_DEMAND_CATALOG.find(entry => entry.packageName === '@deepseek-ai/dsh-cua-bundle'))
-      .toMatchObject({ platforms: ['darwin'], listedByDefault: false })
+    expect(ON_DEMAND_BUNDLES).toEqual(['@deepseek-ai/dsh-subagent-claude-code', '@deepseek-ai/dsh-subagent-codex'])
     expect(OFFICIAL_ON_DEMAND_CATALOG.map(entry => entry.packageName)).toEqual(ON_DEMAND_BUNDLES)
     for (const entry of OFFICIAL_ON_DEMAND_CATALOG) {
       expect(entry.meta.icon).toMatch(/^data:image\/svg\+xml;base64,/)
@@ -24,8 +22,8 @@ describe('Official on-demand catalog', () => {
 describe('Shipped profile templates', () => {
   it('stack each mode bundle on base except the standalone minimal SDK', () => {
     expect(PROFILE_TEMPLATES).toEqual({
-      acp: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-acp-app'] },
       web: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] },
+      netops: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-netops-app'] },
       headless: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'] },
       sdk: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-sdk-app'] },
       'sdk-minimal': { bundles: ['@deepseek-ai/dsh-sdk-minimal'] },

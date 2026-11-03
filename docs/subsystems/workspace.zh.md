@@ -178,6 +178,33 @@ interface SessionActivity {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxdevicecontroller--devicecontroller"></a>
+
+### `ctx.deviceController` — `DeviceController`
+
+Host service backing the generated `ctx.remote.devices` namespace.
+
+```ts cordis-catalog
+/**
+ * List every device the inventory currently returns.
+ * @param signal - caller lifetime.
+ * @returns detached device projections in inventory order.
+ * @throws {RemoteError} `device/inventory-unavailable` when the endpoint fails.
+ */
+@Remote('list') async list(signal: AbortSignal): Promise<DeviceListView>
+
+/**
+ * Read one device by identity.
+ * @param request - requested inventory identity.
+ * @param signal - caller lifetime.
+ * @returns the device projection.
+ * @throws {RemoteError} `device/not-found` or `device/inventory-unavailable`.
+ */
+@Remote('get') async get(request: DeviceGetRequest, signal: AbortSignal): Promise<DeviceView>
+```
+
+Source: [`packages/api/device-controller/src/index.ts`](../../packages/api/device-controller/src/index.ts)
+
 <a id="ctxdirectorypicker--directorypicker-abstract-seam"></a>
 
 ### `ctx.directoryPicker` — `DirectoryPicker` (abstract seam)
@@ -314,11 +341,13 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 
 ```ts cordis-catalog
 /**
- * Create or idempotently resolve one Workspace over an existing directory.
- * @param request - directory path to register.
+ * Create or idempotently resolve one Workspace over an existing directory or
+ * inventory device.
+ * @param request - directory path or device target to register.
+ * @param signal - caller lifetime; cancels inventory validation.
  * @returns the Workspace and whether this call created it.
  */
-@Remote('create') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>
+@Remote('create') create(request: WorkspaceCreateRequest, signal?: AbortSignal): Promise<WorkspaceCreateValue>
 
 /**
  * Initialize or reuse the default Workspace during first-use startup. The
@@ -477,9 +506,10 @@ Durable workspace registry. Startup waits for `sessionPersistence`, builds one c
  * Different canonical paths may share a display title.
  * @param path - Existing directory to own, in a fully qualified path spelling.
  * @param title - Display title used only when a new record is created.
+ * @param target - Device target adopted with a new record; absent for a plain directory.
  * @returns the existing or newly durable workspace.
  */
-async create(path: string, title?: string): Promise<Workspace>
+async create(path: string, title?: string, target?: WorkspaceTarget): Promise<Workspace>
 
 /**
  * Initialize the default Workspace only while both the registry and Session
@@ -587,6 +617,13 @@ unpinSession(sessionId: SessionId): Promise<void>
  * @returns the workspace owning the canonical path, when one exists.
  */
 async resolveByPath(path: string): Promise<Workspace | undefined>
+
+/**
+ * Resolve by adopted device identity without filesystem I/O.
+ * @param deviceId - Inventory device identity.
+ * @returns the workspace whose target names that device, when one exists.
+ */
+findByDevice(deviceId: string): Workspace | undefined
 ```
 
 Types: [SessionId](core.zh.md)

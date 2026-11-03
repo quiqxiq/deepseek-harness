@@ -4,6 +4,7 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { DeviceView } from '@deepseek-ai/dsh-api-device-controller/types'
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -85,14 +86,37 @@ function occupancySource(initial = true) {
   }
 }
 
+/** Manual inventory availability bound like the renderer would: flip() models the Remote mounting late. */
+function deviceInventorySource(initial: boolean) {
+  let available = initial
+  const listeners = new Set<() => void>()
+  const useDeviceInventory = bindSnapshotSelector({
+    getSnapshot: () => available,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+  })
+  return {
+    useDeviceInventory,
+    flip: (next: boolean) => {
+      available = next
+      for (const listener of [...listeners]) listener()
+    },
+  }
+}
+
 function mount(
   items: readonly WorkspaceView[] = [workspace('alpha', 'Alpha')],
   createWorkspace = vi.fn(),
   occupancy = occupancySource(),
+  listDevices?: (signal?: AbortSignal) => Promise<readonly DeviceView[]>,
+  deviceAvailable = listDevices !== undefined,
 ) {
   const onPick = vi.fn()
   const onClose = vi.fn()
   const anchorRef = anchor()
+  const deviceInventory = deviceInventorySource(deviceAvailable)
   const { probe, renderSlot } = flowProbe()
   const renderPicker = (nextItems: readonly WorkspaceView[]) => (
     <WorkspacePicker
@@ -107,6 +131,8 @@ function mount(
       onPick={onPick}
       onClose={onClose}
       createWorkspace={createWorkspace}
+      listDevices={listDevices}
+      useDeviceInventory={deviceInventory.useDeviceInventory}
       useDirectoryFlow={occupancy.useDirectoryFlow}
       renderSlot={renderSlot}
       t={t}
@@ -116,7 +142,7 @@ function mount(
     renderPicker(items),
   )
   return {
-    view, onPick, onClose, createWorkspace, probe, occupancy,
+    view, onPick, onClose, createWorkspace, probe, occupancy, deviceInventory,
     rerenderItems: (nextItems: readonly WorkspaceView[]) => { view.rerender(renderPicker(nextItems)) },
   }
 }
@@ -156,14 +182,65 @@ describe('WorkspacePicker', () => {
     expect(screen.queryByTestId('directory-flow')).toBeNull()
   })
 
-  it('raises the flow straight from the anchor gesture when adding is the only entry', () => {
-    // Nothing to list and one action left: a one-row menu would offer no
-    // choice, so the owner's open request lands in the flow itself.
-    const b = mount([])
-    expect(screen.queryByRole('menu')).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: '添加工作区…' })).toBeNull()
+  it('presents add options when workspace list is empty and raises chosen flow', () => {
+    const b = mount([], vi.fn(), occupancySource(), async () => [])
+    expect(screen.getByRole('menu')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: '添加工作区…' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: '添加网络设备…' })).toBeTruthy()
+    chooseAdd()
     expect(b.onClose).toHaveBeenCalled()
     expect(screen.getByTestId('directory-flow')).toBeTruthy()
+  })
+
+  it('reveals the device entry when the inventory Remote mounts after registration', () => {
+    const b = mount([workspace('alpha', 'Alpha')], vi.fn(), occupancySource(), async () => [], false)
+    expect(screen.queryByRole('menuitem', { name: '添加网络设备…' })).toBeNull()
+    act(() => { b.deviceInventory.flip(true) })
+    expect(screen.getByRole('menuitem', { name: '添加网络设备…' })).toBeTruthy()
+  })
+
+  it('opens device picker modal when selecting add device and adopts chosen device', async () => {
+    const created = { ...workspace('dev-ws'), path: 'device://018f2d5e-7a42-7c89-a1b2-c3d4e5f60001', title: 'Router-Core-CCR2004 (MikroTik)' }
+    const createWorkspace = vi.fn(async () => created)
+    const devices: readonly DeviceView[] = [
+      {
+        id: '018f2d5e-7a42-7c89-a1b2-c3d4e5f60001',
+        name: 'Router-Core-CCR2004',
+        vendor: 'MikroTik',
+        driverType: 'mikrotik',
+        host: '10.0.0.1',
+        port: 8728,
+        tags: ['core', 'gateway'],
+        enabled: true,
+      },
+    ]
+    const b = mount([workspace('alpha', 'Alpha')], createWorkspace, occupancySource(), async () => devices)
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加网络设备…' }))
+    expect(b.onClose).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: '选择网络设备' })).toBeTruthy()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Router-Core-CCR2004')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByText('Router-Core-CCR2004'))
+    fireEvent.click(screen.getByRole('button', { name: '添加为工作区' }))
+    await waitFor(() => {
+      expect(createWorkspace).toHaveBeenCalledWith({
+        target: {
+          kind: 'device',
+          deviceId: '018f2d5e-7a42-7c89-a1b2-c3d4e5f60001',
+          name: 'Router-Core-CCR2004',
+          vendor: 'MikroTik',
+          driverType: 'mikrotik',
+          host: '10.0.0.1',
+          port: 8728,
+        },
+      })
+    })
+    await waitFor(() => {
+      expect(b.onPick).toHaveBeenCalledWith(created.workspaceId)
+    })
   })
 
   it('treats flow cancellation as a silent no-op', () => {
@@ -235,6 +312,7 @@ describe('WorkspacePicker', () => {
         usePanelInfo={usePanelInfo} useContextMenu={contextMenuHook()} useResource={useResource}
         {...allowAllAccess}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
+        useDeviceInventory={hook(false)}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
       />,
     )
@@ -254,6 +332,7 @@ describe('WorkspacePicker', () => {
         usePanelInfo={usePanelInfo} useContextMenu={contextMenuHook()} useResource={useResource}
         {...allowAllAccess}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
+        useDeviceInventory={hook(false)}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
       />,
     )

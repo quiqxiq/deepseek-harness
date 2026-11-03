@@ -146,6 +146,8 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     unarchiveSession: vi.fn(async () => {}),
     insertWorkspaceBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),
+    listDevices: async () => [],
+    useDeviceInventory: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
     useHostInfo: selector => selector({ home: undefined, isLoopback: true }),
     renderSlot: renderDirectoryFlowOnly,
@@ -286,6 +288,7 @@ describe('WorkspaceBrowser', () => {
     add.focus()
     fireEvent.click(add)
     expect(document.activeElement).toBe(add)
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加工作区…' }))
     expect(screen.getByTestId('directory-flow')).toBeTruthy()
     expect(panelInfo.activePanelId).toBe('panel-a')
     expect(b.props.open).not.toHaveBeenCalled()
@@ -1919,6 +1922,7 @@ describe('WorkspaceBrowser', () => {
     const b = mount({ wide: false })
     const add = screen.getByRole('button', { name: '添加工作区' })
     fireEvent.click(add)
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加工作区…' }))
     const flow = screen.getByTestId('directory-flow')
     for (const wide of [true, false, true]) {
       rerender(b, { wide })
@@ -2024,15 +2028,14 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
-  it('rail add-workspace raises the directory flow in place, with no menu and no expansion', () => {
+  it('rail add-workspace presents add choices in place and raises directory flow upon selection', () => {
     const expandSidebar = vi.fn()
     mount({ wide: false, expandSidebar, useWorkspaces: hook(workspaceState([workspace('alpha', [])])) })
     fireEvent.click(screen.getByRole('button', { name: '添加工作区' }))
     expect(expandSidebar).not.toHaveBeenCalled()
-    // Adding is the header's only action, so the gesture IS that action: no
-    // one-row popover, and existing workspaces stay in the tree below.
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByRole('menu')).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: 'alpha' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加工作区…' }))
     expect(screen.getByTestId('directory-flow')).toBeTruthy()
   })
 
@@ -2611,6 +2614,7 @@ describe('Workspace tree grouping', () => {
         ? <button onClick={() => { owner.onPicked('/projects') }}>Pick directory</button> : null) as WorkspaceBrowserProps['renderSlot'],
     })
     fireEvent.click(screen.getByRole('button', { name: '添加工作区' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加工作区…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Pick directory' }))
     await waitFor(() => { expect(b.props.startSession).toHaveBeenCalledWith(wid('root'), { clearPreviousDraft: false }) })
     expect(b.props.createWorkspace).toHaveBeenCalledWith({ path: '/projects' })

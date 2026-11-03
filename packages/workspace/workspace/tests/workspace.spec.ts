@@ -18,12 +18,13 @@ import WorkspaceRegistry, {
   type workspaceDomainState,
   WorkspaceMoveInvalidError,
   WorkspaceOrderInvalidError,
+  writeDeviceMarker,
 } from '../src/index.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from '../src/index.ts'
 import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath } from '../src/paths.ts'
 import * as workspacePaths from '../src/paths.ts'
 
-const DOMAIN_VERSION = 2
+const DOMAIN_VERSION = 3
 
 const header = (id: string, cwd?: string, createdAt = 0): SessionHeader => ({
   version: SESSION_FORMAT_VERSION,
@@ -1535,6 +1536,59 @@ describe('first-use Workspace preparation', () => {
     expect(storedState(pool).defaultWorkspaceId).toBeUndefined()
     await expect(realpath(join(h.directoryRoot, 'nested', 'Workspace'))).resolves.toBe(join(h.directoryRoot, 'nested', 'Workspace'))
     expect(await h.registry.initializeDefault(h.resolveDirectory)).toBeDefined()
+  })
+})
+
+
+describe('device targets', () => {
+  const contexts: Context[] = []
+  afterEach(async () => { await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose())) })
+
+  it('creates, resolves, and updates a device target', async () => {
+    const h = await harness()
+    contexts.push(h.ctx)
+    const directory = await mkdtemp(join(tmpdir(), 'dsh-workspace-device-'))
+    onTestFinished(() => rm(directory, { recursive: true, force: true }))
+
+    const workspace = await h.registry.create(directory, 'Router (MikroTik)', {
+      kind: 'device',
+      deviceId: 'dev-1',
+      name: 'Router',
+      vendor: 'MikroTik',
+      host: '10.0.0.1',
+      sshPort: 22,
+    })
+    expect(workspace.target).toEqual({
+      kind: 'device',
+      deviceId: 'dev-1',
+      name: 'Router',
+      vendor: 'MikroTik',
+      host: '10.0.0.1',
+      sshPort: 22,
+    })
+    expect(h.registry.findByDevice('dev-1')).toBe(workspace)
+    expect(h.registry.findByDevice('dev-2')).toBeUndefined()
+
+    await workspace.setTarget({ kind: 'device', deviceId: 'dev-1', name: 'Renamed' })
+    expect(h.registry.findByDevice('dev-1')?.target?.name).toBe('Renamed')
+  })
+
+  it('backfills a target from device.json on the next startup', async () => {
+    const pool = new MemoryMediaPool()
+    const first = await harness({ pool })
+    const directory = await mkdtemp(join(tmpdir(), 'dsh-workspace-marker-'))
+    onTestFinished(() => rm(directory, { recursive: true, force: true }))
+    await first.registry.create(directory, 'legacy-device')
+    await writeDeviceMarker(directory, { id: 'dev-2', title: 'Core Router' })
+    await first.ctx.fiber.dispose()
+
+    const second = await harness({ pool })
+    contexts.push(second.ctx)
+    expect(second.registry.findByDevice('dev-2')?.target).toMatchObject({
+      kind: 'device',
+      deviceId: 'dev-2',
+      name: 'Core Router',
+    })
   })
 })
 

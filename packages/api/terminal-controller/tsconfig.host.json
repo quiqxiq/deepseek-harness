@@ -11,7 +11,8 @@
     "src/terminal.ts",
     "src/retention.ts",
     "src/stream.ts",
-    "src/shells.ts"
+    "src/shells.ts",
+    "src/device-terminal.ts"
   ],
   "references": [
     {
@@ -58,6 +59,9 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../../workspace/workspace"
     }
   ]
 }

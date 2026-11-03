@@ -13,19 +13,22 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { DomainGlobal, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { WorkspaceEntity } from './entity.ts'
 import type { WorkspaceEntityHost } from './entity.ts'
+import { readDeviceMarker } from './device-marker.ts'
 
 export { WorkspaceMoveInvalidError } from './entity.ts'
 import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath, realpathNormalize } from './paths.ts'
 import { workspaceDomainSpec } from './spec.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
-import type { SessionActivity, Workspace, WorkspaceId as WorkspaceIdBrand } from './types.ts'
+import type { SessionActivity, Workspace, WorkspaceId as WorkspaceIdBrand, WorkspaceTarget } from './types.ts'
 
 export type {
-  SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap, Workspace,
+  SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap, Workspace, WorkspaceTarget,
 } from './types.ts'
-export { workspaceDomainState, workspaceRecord, workspaceDomainSpec } from './spec.ts'
-export type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
+export { workspaceDomainState, workspaceRecord, workspaceTarget, workspaceDomainSpec } from './spec.ts'
+export type { WorkspaceDomainState, WorkspaceRecord, WorkspaceTargetRecord } from './spec.ts'
 export { realpathNormalize } from './paths.ts'
+export { DEVICE_MARKER_FILENAME, readDeviceMarker, writeDeviceMarker } from './device-marker.ts'
+export type { DeviceMarker } from './device-marker.ts'
 
 /** Identifies one workspace record (see `src/types.ts` for the brand rationale). */
 export type WorkspaceId = WorkspaceIdBrand
@@ -216,6 +219,7 @@ export class WorkspaceRegistry extends Service {
     await this.indexLiveSessions()
     this.validateStoredState(this.requireState())
     this.rebuildEntities()
+    await this.backfillDeviceTargets()
     this.reportFilteredCandidates()
   }
 
@@ -228,6 +232,7 @@ export class WorkspaceRegistry extends Service {
    * Different canonical paths may share a display title.
    * @param path - Existing directory to own, in a fully qualified path spelling.
    * @param title - Display title used only when a new record is created.
+   * @param target - Device target adopted with a new record; absent for a plain directory.
    * @returns the existing or newly durable workspace.
    */
   // TODO: `title` lost its last production caller when the gateway's
@@ -235,12 +240,12 @@ export class WorkspaceRegistry extends Service {
   // (.agents/notes/archived/simplification/2026-07-31-one-route-to-add-a-workspace.md);
   // drop the parameter with its @param clause and the `create(path, title?)`
   // lines in this package's README pair.
-  async create(path: string, title?: string): Promise<Workspace> {
+  async create(path: string, title?: string, target?: WorkspaceTarget): Promise<Workspace> {
     const canonical = await realpathNormalize(path)
     if (!(await stat(canonical)).isDirectory()) {
       throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
     }
-    return await this.enqueueOperation(() => this.createCanonical(canonical, title))
+    return await this.enqueueOperation(() => this.createCanonical(canonical, title, false, target))
   }
 
   /**
@@ -507,7 +512,24 @@ export class WorkspaceRegistry extends Service {
     return undefined
   }
 
-  private async createCanonical(canonical: string, title?: string, firstUse = false): Promise<WorkspaceEntity> {
+  /**
+   * Resolve by adopted device identity without filesystem I/O.
+   * @param deviceId - Inventory device identity.
+   * @returns the workspace whose target names that device, when one exists.
+   */
+  findByDevice(deviceId: string): Workspace | undefined {
+    for (const entity of this.entities.values()) {
+      if (entity.target?.deviceId === deviceId) return entity
+    }
+    return undefined
+  }
+
+  private async createCanonical(
+    canonical: string,
+    title?: string,
+    firstUse = false,
+    target?: WorkspaceTarget,
+  ): Promise<WorkspaceEntity> {
     for (const entity of this.entities.values()) {
       if (entity.path === canonical) return entity
     }
@@ -520,6 +542,7 @@ export class WorkspaceRegistry extends Service {
     const record: WorkspaceRecord = {
       path: canonical,
       title: workspaceName,
+      ...(target === undefined ? {} : { target }),
       sessionIds: [],
       createdAt: now,
       updatedAt: now,
@@ -789,6 +812,39 @@ export class WorkspaceRegistry extends Service {
     for (const id of this.requireState().workspaceIds) {
       const record = this.requireTable().get(id) as WorkspaceRecord
       this.entities.set(id, new WorkspaceEntity(this.host, id, record))
+    }
+  }
+
+  /**
+   * Adopt device markers written by the pre-target workspace flow. A record
+   * without a target whose directory carries a valid `device.json` becomes a
+   * device workspace; every other record is left untouched. Unreadable markers
+   * are warned and skipped, because the directory may belong to a plain
+   * workspace that merely contains such a file.
+   */
+  private async backfillDeviceTargets(): Promise<void> {
+    for (const entity of this.entities.values()) {
+      if (entity.target !== undefined) continue
+      let marker
+      try {
+        marker = await readDeviceMarker(entity.path)
+      } catch (error: unknown) {
+        this.ctx.logger.warn(
+          `workspace '${entity.id}' carries an unreadable device marker: ${String(error)}`,
+        )
+        continue
+      }
+      if (marker === undefined) continue
+      await entity.setTarget({
+        kind: 'device',
+        deviceId: marker.id,
+        name: marker.title ?? marker.id,
+        ...marker.vendor === undefined ? {} : { vendor: marker.vendor },
+        ...marker.driverType === undefined ? {} : { driverType: marker.driverType },
+        ...marker.host === undefined ? {} : { host: marker.host },
+        ...marker.port === undefined ? {} : { port: marker.port },
+        ...marker.sshPort === undefined ? {} : { sshPort: marker.sshPort },
+      })
     }
   }
 

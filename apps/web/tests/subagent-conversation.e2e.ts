@@ -497,7 +497,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       expect(await page.getByText(/^Explain event sourcing in one sentence\.Your parent agent id is /).count()).toBe(0)
       releaseCatalog()
       await page.getByRole('button', { name: `Switch subagent: ${LABEL}` }).waitFor({ timeout: 15_000 })
-      const input = page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' })
+      const input = page.getByRole('textbox', { name: 'Message the network assistant, / commands, @ sessions' })
       await input.waitFor({ timeout: 15_000 })
       await expect.poll(() => input.isEnabled(), { timeout: 15_000 }).toBe(true)
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
@@ -521,7 +521,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
         resolveEnded()
       })
     })
-    const input = page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' })
+    const input = page.getByRole('textbox', { name: 'Message the network assistant, / commands, @ sessions' })
     await input.fill(FOLLOWUP)
     await input.press('Enter')
     await expect.poll(
@@ -614,7 +614,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       .click()
     await page.getByRole('button', { name: '2 subagents' }).hover()
     await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
-    await page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' }).waitFor()
+    await page.getByRole('textbox', { name: 'Message the network assistant, / commands, @ sessions' }).waitFor()
     const forkResponse = page.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/session/fork')
     await page.getByRole('button', { name: 'Branch into a new conversation' }).last().click()

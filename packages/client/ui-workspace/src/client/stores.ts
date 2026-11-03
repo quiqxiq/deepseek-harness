@@ -77,12 +77,15 @@ function copySessionOrders(
 
 /**
  * Create the workspace browser viewing store handle.
+ * @param defaultGroupBy - grouping mode used before the browser persists a choice.
  * @returns the store handle (spec + type + identity + factory in one).
  */
-export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState, WorkspaceViewActions> {
+export function createWorkspaceViewStore(
+  defaultGroupBy: SessionGroupBy = 'workspace',
+): EngineStoreHandle<WorkspaceViewState, WorkspaceViewActions> {
   return defineStore({
     init: (): WorkspaceViewState => ({
-      groupBy: 'workspace',
+      groupBy: defaultGroupBy,
       orderBy: 'updated',
       groupExpansion: {},
       sessionOrderByAccount: {},

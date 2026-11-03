@@ -11,18 +11,21 @@
 import type { ReactNode, RefObject } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Button, IconFolderCloseRegular, IconPlusOutlineRegular, Menu, Modal, type MenuEntry,
+  Button, IconFolderCloseRegular, IconGlobeOutlineRegular, IconPlusOutlineRegular, Menu, Modal, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  WorkspaceId, WorkspaceSnapshot, WorkspaceView,
+  WorkspaceCreateRequest, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { DeviceView } from '@deepseek-ai/dsh-api-device-controller/types'
 import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
 import { distinguishingPathSuffixes } from './path-suffix.ts'
+import { DevicePickerModal } from './DevicePickerModal.tsx'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
+const ADD_DEVICE = '::add-device'
 
 /** Core flow props: the owner supplies popover control and pick semantics. */
 export interface WorkspacePickFlowProps {
@@ -34,8 +37,14 @@ export interface WorkspacePickFlowProps {
   anchorRef?: RefObject<HTMLElement | null> | undefined
   /** Selector hook over the workspace list (framework standard hook). */
   useWorkspaces: <S>(selector: (state: WorkspaceSnapshot) => S) => S
-  /** Adopt a picked host directory as a real Workspace. */
-  createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /** Adopt a picked host directory or inventory device as a real Workspace. */
+  createWorkspace: (input: WorkspaceCreateRequest) => Promise<WorkspaceView>
+  /** Read the device inventory; absent leaves the device entry out of the menu. */
+  listDevices?: ((signal?: AbortSignal) => Promise<readonly DeviceView[]>) | undefined
+  /** Live inventory availability: the device entry appears once the Remote mounts. */
+  useDeviceInventory: SnapshotSelectorHook<boolean>
+  /** Whether the add menu offers host-directory workspaces. */
+  allowDirectoryWorkspace?: boolean | undefined
   /** Bound occupancy selector hook for this surface's directory-flow hole (empty leaves the surface with no add action). */
   useDirectoryFlow: SnapshotSelectorHook<boolean>
   /** Render this surface's directory-flow hole with the owner conversation (the entry's narrowed renderSlot). */
@@ -65,6 +74,9 @@ export function WorkspacePickFlow({
   anchorRef,
   useWorkspaces,
   createWorkspace,
+  listDevices,
+  useDeviceInventory,
+  allowDirectoryWorkspace = true,
   useDirectoryFlow,
   renderDirectoryFlow,
   onPick,
@@ -83,6 +95,7 @@ export function WorkspacePickFlow({
   const [errorOpen, setErrorOpen] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
+  const [deviceModalOpen, setDeviceModalOpen] = useState(false)
   const [pickingFolder, setPickingFolder] = useState(false)
   // One picking interaction at a time: while the flow is open (native chooser
   // pending, browse dialog up) or its pick is being adopted, every other
@@ -96,6 +109,9 @@ export function WorkspacePickFlow({
   // framework-bound hook keeps occupancy live: flow plugins activate (and
   // HMR-reload) independently of this menu's renders.
   const flowAvailable = useDirectoryFlow(occupied => occupied)
+  // The devices namespace may mount after this picker registers, so the entry
+  // follows the live availability source instead of the inject-time callback.
+  const deviceInventoryAvailable = useDeviceInventory(available => available) && listDevices !== undefined
   // An occupant that unloads mid-interaction leaves nobody to cancel: an
   // open flow over an empty hole withdraws so the menu actions come back.
   // flowOpen is a dependency because the flow can also OPEN over an already
@@ -104,9 +120,14 @@ export function WorkspacePickFlow({
   useEffect(() => {
     if (flowOpen && !flowAvailable) setFlowOpen(false)
   }, [flowOpen, flowAvailable])
-  const addEntries: MenuEntry[] = flowAvailable
-    ? [{ id: ADD_WORKSPACE, label: t('menu.addWorkspace'), icon: <IconPlusOutlineRegular size={16} />, disabled: flowBusy }]
-    : []
+  const addEntries: MenuEntry[] = [
+    ...(flowAvailable && allowDirectoryWorkspace
+      ? [{ id: ADD_WORKSPACE, label: t('menu.addWorkspace'), icon: <IconPlusOutlineRegular size={16} />, disabled: flowBusy }]
+      : []),
+    ...(!deviceInventoryAvailable
+      ? []
+      : [{ id: ADD_DEVICE, label: t('menu.addDevice'), icon: <IconGlobeOutlineRegular size={16} />, disabled: flowBusy }]),
+  ]
   // With workspaces listed, the add action pins below the scroll region
   // (divider + always visible); otherwise it IS the menu.
   const pinAdd = !addOnly && workspaces.length > 0
@@ -118,28 +139,37 @@ export function WorkspacePickFlow({
     const rows = workspaces.map(workspace => ({
       id: workspace.workspaceId,
       title: workspaceDisplayTitle(workspace.title, defaultWorkspaceName),
-      path: workspace.path,
+      // A device row disambiguates by vendor and management address, never by
+      // its internal artifact directory.
+      path: workspace.target === undefined
+        ? workspace.path
+        : [workspace.target.vendor, workspace.target.host].filter(value => value !== undefined && value !== '').join(' ')
+          || workspace.target.deviceId,
+      target: workspace.target,
     }))
     const suffixes = distinguishingPathSuffixes(rows)
     return rows.map(row => ({ ...row, suffix: suffixes.get(row.id) }))
   }, [pinAdd, workspaces, defaultWorkspaceName])
   const items: MenuEntry[] = pinAdd
-    ? listed.map(({ id, title, path, suffix }) => ({
-      id,
-      // The title gives way first, so the suffix that tells the rows apart
-      // stays visible; the native tooltip carries the full path.
-      label: suffix === undefined
-        ? title
-        : (
-          <span className={css.disambiguated} title={path}>
-            <span className={css.title}>{title}</span>
-            {' '}
-            <span className={css.pathSuffix}>{suffix}</span>
-          </span>
-        ),
-      icon: <IconFolderCloseRegular size={16} />,
-      disabled: flowBusy,
-    }))
+    ? listed.map(({ id, title, path, target, suffix }) => {
+      const isDevice = target !== undefined
+      return {
+        id,
+        // The title gives way first, so the suffix that tells the rows apart
+        // stays visible; the native tooltip carries the full path.
+        label: suffix === undefined
+          ? title
+          : (
+            <span className={css.disambiguated} title={path}>
+              <span className={css.title}>{title}</span>
+              {' '}
+              <span className={css.pathSuffix}>{suffix}</span>
+            </span>
+          ),
+        icon: isDevice ? <IconGlobeOutlineRegular size={16} /> : <IconFolderCloseRegular size={16} />,
+        disabled: flowBusy,
+      }
+    })
     : addEntries
   // Nothing listed and nothing to add with (a composition that mounts this
   // package without any directory-picker): an empty popover would claim a
@@ -162,6 +192,28 @@ export function WorkspacePickFlow({
       setErrorOpen(true)
     })
 
+  /** Adopt a selected network device as a real Workspace. */
+  const adoptDevice = (device: DeviceView): Promise<void> =>
+    createWorkspace({
+      target: {
+        kind: 'device',
+        deviceId: device.id,
+        name: device.name,
+        ...device.vendor === '' ? {} : { vendor: device.vendor },
+        ...device.driverType === '' ? {} : { driverType: device.driverType },
+        ...device.host === '' ? {} : { host: device.host },
+        ...device.port === undefined ? {} : { port: device.port },
+        ...device.sshPort === undefined ? {} : { sshPort: device.sshPort },
+      },
+    }).then((workspace) => {
+      setDeviceModalOpen(false)
+      onPick(workspace.workspaceId)
+    }).catch((reason: unknown) => {
+      setModalError(reason instanceof Error ? reason.message : String(reason))
+      setDeviceModalOpen(false)
+      setErrorOpen(true)
+    })
+
   const openDirectoryFlow = useCallback((): void => {
     onClose()
     setErrorOpen(false)
@@ -178,7 +230,7 @@ export function WorkspacePickFlow({
   // loading status instead of jumping into a flow the arriving list would have
   // made unnecessary; the add-only surface lists nothing and never waits.
   const listSettled = addOnly || workspaceSnapshot.phase === 'ready'
-  const addIsTheOnlyEntry = !pinAdd && listSettled && addEntries.length === 1
+  const addIsTheOnlyEntry = !pinAdd && listSettled && addEntries.length === 1 && addEntries[0]?.id === ADD_WORKSPACE
   // `flowBusy` gates this exactly as it disables the equivalent menu entry: a
   // pick still being adopted owns the surface until it settles.
   useEffect(() => {
@@ -206,6 +258,11 @@ export function WorkspacePickFlow({
       openDirectoryFlow()
       return
     }
+    if (id === ADD_DEVICE) {
+      onClose()
+      setDeviceModalOpen(true)
+      return
+    }
     onPick(id as WorkspaceId)
   }
 
@@ -225,6 +282,13 @@ export function WorkspacePickFlow({
       />
       {open && !addIsTheOnlyEntry && !menuIsEmpty && workspaceSnapshot.phase === 'pending' && <div className={css.menuStatus} role="status">{t('picker.loading')}</div>}
       {renderDirectoryFlow(flowOwner)}
+      <DevicePickerModal
+        open={deviceModalOpen}
+        onClose={() => { setDeviceModalOpen(false) }}
+        onSelect={(device) => { void adoptDevice(device) }}
+        listDevices={listDevices}
+        t={t}
+      />
       <Modal
         open={errorOpen}
         onClose={closeModal}
@@ -259,6 +323,9 @@ export function WorkspacePicker({
   onPick,
   onClose,
   createWorkspace,
+  listDevices,
+  useDeviceInventory,
+  allowDirectoryWorkspace,
   useDirectoryFlow,
   renderSlot,
   t,
@@ -270,6 +337,9 @@ export function WorkspacePicker({
       anchorRef={anchorRef}
       useWorkspaces={useWorkspaces}
       createWorkspace={createWorkspace}
+      listDevices={listDevices}
+      useDeviceInventory={useDeviceInventory}
+      allowDirectoryWorkspace={allowDirectoryWorkspace}
       useDirectoryFlow={useDirectoryFlow}
       renderDirectoryFlow={owner => renderSlot('conversation.hero.workspace.directoryFlow', owner)}
       selectedId={selectedId}

@@ -39,10 +39,16 @@ export interface Config {
   documentsDirectory?: string
   /** Maximum duration of the operating system's Documents lookup. */
   documentsLookupTimeoutMs?: number
+  /**
+   * Whether an empty installation auto-creates the first-use Workspace in the
+   * system Documents directory. Device-first deployments turn this off so the
+   * client opens the device picker instead.
+   */
+  autoCreateDefault?: boolean
 }
 
 /** Directory policy after schema defaults have been applied. */
-type ResolvedConfig = Config & { documentsLookupTimeoutMs: number }
+type ResolvedConfig = Config & { documentsLookupTimeoutMs: number; autoCreateDefault: boolean }
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -58,6 +64,7 @@ export class WorkspaceController extends TypertRemoteService {
   static Config: z<Config, ResolvedConfig> = z.object({
     documentsDirectory: z.string(),
     documentsLookupTimeoutMs: z.natural().min(1).default(10_000),
+    autoCreateDefault: z.boolean().default(true),
   })
 
   private readonly config: ResolvedConfig
@@ -83,13 +90,15 @@ export class WorkspaceController extends TypertRemoteService {
   }
 
   /**
-   * Create or idempotently resolve one Workspace over an existing directory.
-   * @param request - directory path to register.
+   * Create or idempotently resolve one Workspace over an existing directory or
+   * inventory device.
+   * @param request - directory path or device target to register.
+   * @param signal - caller lifetime; cancels inventory validation.
    * @returns the Workspace and whether this call created it.
    */
   @Remote('create')
-  create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
-    return this.commands.create(request)
+  create(request: WorkspaceCreateRequest, signal?: AbortSignal): Promise<WorkspaceCreateValue> {
+    return this.commands.create(request, signal)
   }
 
   /**
@@ -102,6 +111,7 @@ export class WorkspaceController extends TypertRemoteService {
    */
   @Remote('initializeDefault')
   async initializeDefault(signal: AbortSignal): Promise<WorkspaceValue | undefined> {
+    if (!this.config.autoCreateDefault) return undefined
     const workspace = await this.ctx.workspaceRegistry.initializeDefault(async () => {
       const timeout = AbortSignal.timeout(this.config.documentsLookupTimeoutMs)
       return await defaultWorkspaceDirectory(

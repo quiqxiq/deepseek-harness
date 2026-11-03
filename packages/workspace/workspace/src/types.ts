@@ -60,6 +60,30 @@ export interface SessionActivity {
 }
 
 /**
+ * The external system a workspace operates on. A device workspace targets one
+ * inventory device and keeps its local artifacts under a per-device directory;
+ * a workspace without a target is an ordinary host directory.
+ */
+export type WorkspaceTarget = {
+  /** Target discriminator. */
+  readonly kind: 'device'
+  /** Inventory identity of the device. */
+  readonly deviceId: string
+  /** Human-readable device name at adoption time. */
+  readonly name: string
+  /** Inventory vendor label. */
+  readonly vendor?: string | undefined
+  /** Device driver family reported by inventory. */
+  readonly driverType?: string | undefined
+  /** Management host or address. */
+  readonly host?: string | undefined
+  /** Management protocol port. */
+  readonly port?: number | undefined
+  /** SSH port used by the device console. */
+  readonly sshPort?: number | undefined
+}
+
+/**
  * One workspace: a stable id over an existing directory, a display title, and
  * an ordered candidate account of sessions. Membership validates header cwd
  * against the workspace path, but preserves an existing account when its
@@ -79,6 +103,13 @@ export interface Workspace {
 
   /** Display title. Defaults to the final path segment, or a filesystem root's own spelling; duplicates are allowed. */
   readonly title: string
+
+  /**
+   * External target this workspace operates on. Absent for an ordinary host
+   * directory; a device target keeps {@link path} as its local artifact
+   * directory and is rendered by device identity instead of the path.
+   */
+  readonly target?: WorkspaceTarget | undefined
 
   /** ISO-8601 creation instant, stamped at create and never rewritten. */
   readonly createdAt: string
@@ -105,6 +136,13 @@ export interface Workspace {
    * @returns resolution after durability.
    */
   setTitle(title: string): Promise<void>
+
+  /**
+   * Replace the external target durably, typically after re-reading inventory.
+   * @param target - New target, or undefined to turn the workspace into a plain directory.
+   * @returns resolution after durability.
+   */
+  setTarget(target: WorkspaceTarget | undefined): Promise<void>
 
   /**
    * Prepend a session to this workspace's candidate account. An already

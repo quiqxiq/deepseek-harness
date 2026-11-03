@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/api/device-controller/README.md
+/:
+  en: 25ef8d752a43cfa8
+  zh: 17de2638764d0950
+/deepseek-ai-dsh-api-device-controller:
+  en: 596626a376c7ee52
+  zh: 8390f7f96384e7e0
+/deepseek-ai-dsh-api-device-controller/summary:
+  en: 0be8eb02edf2c064
+  zh: 088da9befbef6f47
+/deepseek-ai-dsh-api-device-controller/table-of-contents:
+  en: 4e53164159b5ce41
+  zh: 89582dc0294d0776
+/deepseek-ai-dsh-api-device-controller/use-this-package:
+  en: dbe30a834c2a201d
+  zh: 818d0b78603c0386
+/deepseek-ai-dsh-api-device-controller/model-experience:
+  en: 1653bb1c2893d1d0
+  zh: 024225b7cb537a4d
+/deepseek-ai-dsh-api-device-controller/known-limitations-and-deferred-work:
+  en: 9ef0ebc0bb70836c
+  zh: 2f75347b5bb5c9bf
+/deepseek-ai-dsh-api-device-controller/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

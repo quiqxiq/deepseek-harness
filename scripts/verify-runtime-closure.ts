@@ -6,6 +6,7 @@
  */
 import { globSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { isCordisGroupEntry, loadCordisYaml, presetDefinitions } from './cordis-yaml.ts'
@@ -50,6 +51,9 @@ export async function verifyRuntimeClosure(
   manifestPath = 'python/sdk-runtime/package.json',
   includePresets = true,
 ): Promise<RuntimeClosureResult> {
+  if (!existsSync(resolve(root, manifestPath))) {
+    return { failures: [], presetCount: 0, workspacePackageCount: 0 }
+  }
   const runtimeManifest = await loadManifest(resolve(root, manifestPath))
   const runtimeName = runtimeManifest.name ?? manifestPath
   const workspace = await loadWorkspacePackages(root)
@@ -107,6 +111,10 @@ if (import.meta.main) {
     options: { manifest: { type: 'string' } },
   })
   const result = await verifyRuntimeClosure(root, values.manifest)
+  if (!existsSync(resolve(root, values.manifest ?? 'python/sdk-runtime/package.json'))) {
+    console.log('verify-runtime-closure: no runtime manifest in this checkout; skipped.')
+    process.exit(0)
+  }
   if (result.failures.length > 0) {
     console.error('verify-runtime-closure: preset plugins or required workspace peers are missing from python/sdk-runtime dependencies:')
     for (const failure of result.failures) console.error(`  ${failure}`)

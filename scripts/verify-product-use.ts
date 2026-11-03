@@ -15,7 +15,7 @@ import { PRODUCT_PACKAGE_POLICY, type ProductPackagePolicy } from './product-pac
 import { collectRuntimeLocalSourceSpecifiers, collectRuntimeSourceSpecifiers } from './verify-client-packages.ts'
 
 const PROFILE_SOURCE = 'packages/util/official-bundles/src/bundles.ts'
-const PROFILES = ['acp', 'web', 'headless', 'sdk', 'sdk-minimal']
+const PROFILES = ['web', 'netops', 'headless', 'sdk', 'sdk-minimal']
 const PICKER_SOURCE = 'packages/host/directory-picker-auto/src/index.ts'
 const DYNAMIC_MOUNTS: Readonly<Record<string, readonly string[]>> = {
   [PICKER_SOURCE]: ['BACKEND_PACKAGES', 'SURFACE_PACKAGES'],
@@ -215,7 +215,7 @@ export function verifyProductUse(
     const webBundles = stringList(web.bundles, `${PROFILE_SOURCE} web`)
     for (const bundle of optionals) scanEntries(composeEntries(layers([...webBundles, bundle], optional)), profilePath, optional)
   }
-  for (const path of ['apps/cli/src/bin.ts', 'apps/desktop/src/main.ts']) scanSource(resolve(root, path), defaults)
+  for (const path of ['apps/cli/src/bin.ts']) scanSource(resolve(root, path), defaults)
   const htmlPath = resolve(root, 'apps/web/index.html')
   const dom = new JSDOM(readFileSync(htmlPath, 'utf8'))
   try {

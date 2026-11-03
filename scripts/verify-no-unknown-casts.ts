@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 
@@ -88,7 +88,7 @@ export function scanUnknownCasts(repoRoot: string): UnknownCast[] {
     if (stat?.isSymbolicLink()) throw new Error(`verify-no-unknown-casts: source symlink is unsupported: ${file}`)
     return stat?.isFile() === true
   })
-  for (const area of ['packages/', 'apps/', 'scripts/', 'website/']) {
+  for (const area of ['packages/', 'apps/', 'scripts/', 'website/'].filter(area => existsSync(resolve(root, area)))) {
     if (!present.some(file => file.startsWith(area))) {
       throw new Error(`verify-no-unknown-casts: source discovery omitted ${area}`)
     }

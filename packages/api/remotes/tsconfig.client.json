@@ -91,6 +91,9 @@
       "path": "../workspace-controller/tsconfig.client.json"
     },
     {
+      "path": "../device-controller/tsconfig.client.json"
+    },
+    {
       "path": "../../typert/protocol"
     },
     {

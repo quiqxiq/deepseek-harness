@@ -18,7 +18,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
  * packages/client/AGENTS.md.
  */
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
+import type {} from '@deepseek-ai/dsh-api-device-controller/remote'
+import type { DeviceView } from '@deepseek-ai/dsh-api-device-controller/types'
 import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ISessions, SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
@@ -47,7 +50,7 @@ import {
 } from './contract/slots.ts'
 import { createWorkspaceShortcutControls, installWorkspaceShortcuts } from './shortcuts.ts'
 import { UiWorkspaceService } from './navigation.ts'
-import { createWorkspaceViewStore } from './stores.ts'
+import { createWorkspaceViewStore, type SessionGroupBy } from './stores.ts'
 import { WorkspaceBrowser } from './rows/WorkspaceBrowser.tsx'
 import { ArchiveSessionRowButton, SessionArchiveConfirmDialog } from './session-actions/ArchiveSession.tsx'
 import { derive } from './session-actions/derived.ts'
@@ -100,6 +103,27 @@ const NS = 'workspace'
  * provides a waitable service. apply therefore depends on each slot
  * declaration through `slots.inject()` instead of assuming order.
  */
+
+/** Browser-shell configuration for the Workspace/session list. */
+export interface Config {
+  /** Grouping mode used until the user picks one; defaults to Workspace sections. */
+  defaultGroupBy?: SessionGroupBy
+  /** Whether the add menu offers host-directory workspaces; device-first deployments turn this off. */
+  allowDirectoryWorkspace?: boolean
+  /**
+   * Whether the add menu may offer the network-device inventory. Deprecated:
+   * availability is now observed live from the `remote.devices` service.
+   */
+  deviceInventory?: boolean
+}
+
+/** Validated Workspace-browser configuration. */
+export const Config: z<Config> = z.object({
+  defaultGroupBy: z.union(['workspace', 'workspace-tree', 'flat']).default('workspace'),
+  allowDirectoryWorkspace: z.boolean().default(true),
+  deviceInventory: z.boolean(),
+})
+
 export const inject = ['contextMenus',
   'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
 ]
@@ -109,14 +133,57 @@ export const inject = ['contextMenus',
  * ledger. Inject factories return plain callbacks; data reads use the
  * framework's global hooks.
  * @param ctx - client root context.
+ * @param config - validated Workspace-browser configuration.
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: Config = Config({})): void {
   const sessions = ctx.get('sessions') as ISessions
   const workspaces = ctx.get('workspaces') as IWorkspaces
+  // The devices namespace mounts after this plugin's own required services,
+  // so the entry follows a live availability source instead of the inject-time
+  // Remote reference (which would stay undefined for the registration's life).
+  // The client remotes assembly mounts the namespace in every profile, so
+  // availability is probed live against the Host to keep the entry out of
+  // deployments (such as standard dsh web) that mount no inventory controller.
+  const deviceInventory = createSnapshotStore(false)
+  if (config.deviceInventory !== false) {
+    ctx.inject(['remote.devices'], (scope) => {
+      let active = true
+      const probe = async (): Promise<void> => {
+        try {
+          const deviceRemote = scope.get('remote.devices') as typeof ctx.remote.devices | undefined
+          if (deviceRemote === undefined) return
+          const result = await deviceRemote.list()
+          if (active && result && result.ok) {
+            deviceInventory.set(true)
+          } else if (active) {
+            deviceInventory.set(false)
+          }
+        } catch {
+          if (active) deviceInventory.set(false)
+        }
+      }
+      void probe()
+      const disposeReset = scope.on('connection/reset', () => {
+        void probe()
+      })
+      return () => {
+        active = false
+        disposeReset()
+        deviceInventory.set(false)
+      }
+    })
+  }
+  const listDevices = async (signal?: AbortSignal): Promise<readonly DeviceView[]> => {
+    const deviceRemote = ctx.get('remote.devices') as typeof ctx.remote.devices | undefined
+    if (deviceRemote === undefined) throw new Error('device inventory is unavailable')
+    const result = await deviceRemote.list(signal)
+    if (!result.ok) throw new Error(result.error.message)
+    return result.value.devices
+  }
   // One viewing-store instance, created here as ui-layout does for its layout
   // store: the browser declares the handle, and the UiWorkspace service writes
   // view order through the same instance the renderer hands the browser.
-  const viewHandle = createWorkspaceViewStore()
+  const viewHandle = createWorkspaceViewStore(config.defaultGroupBy)
   const viewInstance = viewHandle.create()
   const viewStore: typeof viewHandle = { ...viewHandle, create: () => viewInstance }
   const rowToast = createSnapshotStore<RowToastState | null>(null)
@@ -314,16 +381,20 @@ export function apply(ctx: Context): void {
     },
     unarchiveSession: async (sessionId) => { await uiWorkspace.unarchiveSession(sessionId) },
     createWorkspace: input => workspaces.create(input),
+    listDevices,
+    allowDirectoryWorkspace: config.allowDirectoryWorkspace ?? true,
     requestSearch: shortcutControls.search,
     requestAddWorkspace: shortcutControls.add,
     closeAddWorkspace: shortcutControls.closeAdd,
     setDirectoryBusy: shortcutControls.directoryBusy,
-    hooks: { workspaceActionRequest, contextMenuTarget: ctx.contextMenus.active, directoryFlow: browserFlowSource, hostInfo,
-      workspaceShortcuts: shortcutControls.state, shortcuts: ctx.shortcuts.catalog },
+    hooks: { workspaceActionRequest, contextMenuTarget: ctx.contextMenus.active, directoryFlow: browserFlowSource, deviceInventory,
+      hostInfo, workspaceShortcuts: shortcutControls.state, shortcuts: ctx.shortcuts.catalog },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => workspaces.create(input),
-    hooks: { directoryFlow: pickerFlowSource },
+    listDevices,
+    allowDirectoryWorkspace: config.allowDirectoryWorkspace ?? true,
+    hooks: { directoryFlow: pickerFlowSource, deviceInventory },
   })
   // Each registration declares its owned children in the same call; slot
   // injection follows both the owner and declaration HMR lifetimes.

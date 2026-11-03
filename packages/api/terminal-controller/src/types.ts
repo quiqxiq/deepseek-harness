@@ -26,6 +26,8 @@ export interface TerminalShell {
   readonly path: string
   readonly args: readonly string[]
   readonly name: string
+  /** Distinguishes a device SSH console from a local shell; absent means `shell`. */
+  readonly kind?: 'shell' | 'device'
 }
 
 /** Current Session directory and terminal limits; retained terminals keep their own process directories. */

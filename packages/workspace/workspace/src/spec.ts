@@ -16,14 +16,34 @@ const workspaceId = z.string().transform(value => value as WorkspaceId)
 
 const sessionId = z.string().transform(value => brandString<SessionId>(value))
 
+/** Durable external target of one workspace; absent records are plain directories. */
+export const workspaceTarget = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('device'),
+    deviceId: z.string().min(1),
+    name: z.string(),
+    vendor: z.string().optional(),
+    driverType: z.string().optional(),
+    host: z.string().optional(),
+    port: z.number().int().optional(),
+    sshPort: z.number().int().optional(),
+  }),
+])
+
+/** One stored workspace target, inferred from {@link workspaceTarget}. */
+export type WorkspaceTargetRecord = z.infer<typeof workspaceTarget>
+
 /**
  * Durable shape of one workspace record. `path` is the `fs.realpath` canon
- * stamped at create; `sessionIds` is the ordered ownership account (array
- * order is display order); timestamps are ISO-8601 strings.
+ * stamped at create (or the per-device artifact directory for a device
+ * target); `sessionIds` is the ordered ownership account (array order is
+ * display order); timestamps are ISO-8601 strings. `target` is absent on every
+ * record written before device workspaces existed.
  */
 export const workspaceRecord = z.object({
   path: z.string(),
   title: z.string(),
+  target: workspaceTarget.optional(),
   sessionIds: z.array(sessionId),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -75,7 +95,8 @@ export type WorkspaceDomainState = z.infer<typeof workspaceDomainState>
  */
 export const workspaceDomainSpec = defineDomain({
   name: 'workspace',
-  version: 2,
+  version: 3,
+  compatibleVersions: [2],
   global: {
     schema: workspaceDomainState,
     initial: { initialized: false, workspaceIds: [], archivedSessionIds: [], pinnedSessionIds: [] },

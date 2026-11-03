@@ -1,0 +1,269 @@
+# The dsh-netops-app bundle patch: a device-first network-operations surface
+# layered over dsh-web-app. Apply it after the web bundle:
+#   dsh --profile netops
+#
+# It replaces the coding preset with a network-operations assistant, keeps the
+# chat, device workspace, files, and terminal surfaces, and removes coding,
+# document, feedback, and automation chrome. Device inventory and the device
+# console resolve their endpoints from the `netops` service this bundle
+# provides (see src/index.ts and README.md).
+
+# ── 1. Network-operations persona and preset ────────────────────────────────
+
+- id: system-prompt
+  config:
+    personaPrefix: >-
+      You are a network operations assistant. Help engineers observe, diagnose,
+      and operate network infrastructure and services. Work from evidence from
+      the configured tools; never invent device output. Prefer read-only
+      discovery first, quote the evidence you used, and separate observed facts
+      from inference. Before a potentially disruptive action (configuration
+      change, restart, session reset, route withdrawal), state the target,
+      expected impact, and rollback, then ask for explicit confirmation.
+
+- id: preset-standard
+  config:
+    id: standard
+    name: Network Operations
+    order: 1
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          prefix: >-
+            You are a network operations assistant for a vendor-neutral network
+            environment. Help engineers monitor, diagnose, and operate network
+            devices, links, routing, and services using the tools configured in
+            this Session. When a device workspace is active, the device identity
+            arrives in a device-context message; use that device_id unless the
+            user names another device. Do not assume a vendor, controller, or
+            command syntax that the available tools do not expose. If a tool is
+            unavailable, say what is missing and propose an alternative check
+            instead of guessing.
+          complete: true
+          includeRuntimeContext: false
+      - id: time-context
+        name: '@deepseek-ai/dsh-time-context'
+      - id: device-context
+        name: '@deepseek-ai/dsh-device-context'
+      - id: tool-web
+        name: '@deepseek-ai/dsh-tool-web'
+        config:
+          fetch: true
+          searchTimeoutMs: 60000
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+      - id: tool-todo
+        name: '@deepseek-ai/dsh-tool-todo'
+        config:
+          allowParallelInProgress: true
+      - id: fs
+        name: '@deepseek-ai/dsh-tool-fs'
+        config:
+          applyPatch: false
+      - id: fs-search
+        name: '@deepseek-ai/dsh-tool-fs-search'
+        config:
+          sampleOverCapGlobResults: false
+      - id: shell
+        name: '@deepseek-ai/dsh-tool-bash'
+        disabled: !!js process.platform === 'win32'
+      - id: pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+        disabled: !!js process.platform !== 'win32'
+      - id: skill-filesystem
+        name: '@deepseek-ai/dsh-skill-filesystem'
+      - id: tool-skill
+        name: '@deepseek-ai/dsh-tool-skill'
+      - id: command-goal
+        name: '@deepseek-ai/dsh-command-goal'
+      - id: tool-goal
+        name: '@deepseek-ai/dsh-tool-goal'
+      - id: planning
+        name: cordis:group
+        group: true
+        isolate:
+          planMode: true
+        config:
+          - id: plan-mode
+            name: '@deepseek-ai/dsh-plan-mode'
+            config:
+              section: |
+                You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it.
+                Explore first with non-mutating reads and configured read-only tools. Do not change device configuration, run disruptive commands, or edit files.
+                Make the plan decision-complete: state the goal and success criteria; group changes by device or subsystem; identify expected impact and rollback; cover verification steps and explicit assumptions.
+                When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response.
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+          toolResultPruner: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: command-compact
+            name: '@deepseek-ai/dsh-command-compact'
+          - id: tool-result-pruner
+            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+            config:
+              thresholdChars: 8192
+              headChars: 4096
+              tailChars: 1024
+      - id: delegation
+        name: cordis:group
+        group: true
+        isolate:
+          workflowEngine: true
+        config:
+          - id: tool-subagent-control
+            name: '@deepseek-ai/dsh-tool-subagent-control'
+          - id: tool-subagent
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: subagent
+              modelSelection: true
+              modelDiscovery: true
+          - id: tool-subagent-fork
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: fork
+              toolName: subagent_fork
+          - id: workflow-ptc
+            name: '@deepseek-ai/dsh-workflow-ptc'
+            config:
+              provider: spawn
+          - id: tool-workflow
+            name: '@deepseek-ai/dsh-tool-workflow'
+
+# Keep exactly one agent preset.
+- id: preset-ptc
+  disabled: true
+- id: preset-minimal
+  disabled: true
+- id: preset-cordis
+  disabled: true
+
+# ── 2. Connection facts ─────────────────────────────────────────────────────
+
+- insert:
+    - id: netops
+      name: '@deepseek-ai/dsh-netops-app'
+
+    # Host-owned inventory read. The browser never receives the token or the
+    # upstream response body.
+    - id: device-controller
+      name: '@deepseek-ai/dsh-api-device-controller'
+      inject: [netops]
+      config:
+        baseUrl: !!js ctx.netops.apiBaseUrl
+        token: !!js ctx.netops.apiToken
+        timeoutMs: 10000
+
+    # The Polyglot MCP tool server. Its server name becomes the tool
+    # namespace: mcp__polyglot__<tool>.
+    - id: mcp-polyglot
+      name: '@deepseek-ai/dsh-mcp-client'
+      inject: [netops]
+      config:
+        serverName: polyglot
+        transport: streamable-http
+        url: !!js ctx.netops.mcpUrl
+        headers: !!js "ctx.netops.mcpToken ? { Authorization: 'Bearer ' + ctx.netops.mcpToken } : {}"
+        toolCallTimeoutMs: 30000
+        failOnStartupError: false
+
+    # Optional second, vendor-neutral MCP server.
+    - id: mcp-network
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: !!js "!process.env.NETOPS_MCP_URL"
+      config:
+        serverName: !!js process.env.NETOPS_MCP_SERVER_NAME || 'network'
+        transport: streamable-http
+        url: !!js process.env.NETOPS_MCP_URL || 'http://127.0.0.1:9/mcp'
+        headers: !!js "process.env.NETOPS_MCP_TOKEN ? { Authorization: 'Bearer ' + process.env.NETOPS_MCP_TOKEN } : {}"
+        toolCallTimeoutMs: 30000
+        failOnStartupError: false
+
+# ── 3. Device workspaces and terminal ───────────────────────────────────────
+
+# Device-first first use opens the device picker instead of creating a
+# Documents-directory Workspace.
+- id: workspace-controller
+  config:
+    autoCreateDefault: false
+
+- id: ui-workspace
+  config:
+    defaultGroupBy: flat
+    allowDirectoryWorkspace: false
+    deviceInventory: true
+
+# A device workspace's default terminal is the SSH console; local shells stay
+# selectable from the shell picker.
+- id: terminal-controller
+  inject: [netops]
+  config:
+    deviceConsole:
+      enabled: true
+      wsBaseUrl: !!js ctx.netops.wsBaseUrl
+      token: !!js ctx.netops.wsToken
+      connectTimeoutMs: 10000
+      default: true
+
+- id: ui-sidebar-terminal
+  disabled: false
+- id: ui-sidebar-files
+  disabled: false
+- id: workspace-files
+  disabled: false
+
+# ── 4. Remove coding, document, feedback, and automation chrome ─────────────
+
+- id: ui-sidebar-documentpreview
+  disabled: true
+- id: office-to-pdf
+  disabled: true
+- id: ui-sidebar-browser
+  disabled: true
+- id: open-in-app
+  disabled: true
+- id: ui-open-in-app
+  disabled: true
+- id: workspace-changes
+  disabled: true
+- id: ui-deliverables
+  disabled: true
+- id: deliverable-file-references
+  disabled: true
+- id: session-turn-outline
+  disabled: true
+- id: ui-trajectory
+  disabled: true
+- id: ui-workflow-run
+  disabled: false
+- id: ui-jobs
+  disabled: true
+- id: job-controller
+  disabled: true
+- id: ui-schedule
+  disabled: true
+- id: schedule
+  disabled: true
+- id: message-feedback
+  disabled: true
+- id: ui-message-feedback
+  disabled: true
+- id: command-feedback
+  disabled: true
+- id: harness-dev-context
+  disabled: true
+- id: ui-cordis
+  disabled: true
+- id: desktop-product-telemetry
+  disabled: true
+- id: product-analytics
+  disabled: true
+- id: ui-settings-session-log
+  disabled: true

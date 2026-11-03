@@ -1,7 +1,8 @@
 /** Workspace command implementation and stable Remote failure mapping. */
 
+import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Workspace } from '@deepseek-ai/dsh-workspace'
+import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import {
   WorkspaceActiveSessionError,
   WorkspaceArchivedSessionPinError,
@@ -9,7 +10,10 @@ import {
   WorkspaceMoveInvalidError,
   WorkspaceOrderInvalidError,
   WorkspaceUnknownSessionError,
+  writeDeviceMarker,
 } from '@deepseek-ai/dsh-workspace'
+import type { Workspace, WorkspaceTarget } from '@deepseek-ai/dsh-workspace'
+import type {} from '@deepseek-ai/dsh-api-device-controller'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import { workspaceView } from './feed.ts'
 import type {
@@ -38,29 +42,123 @@ export class WorkspaceCommands {
   constructor(private readonly ctx: Context) {}
 
   /**
-   * Create or resolve one Workspace over an existing directory.
-   * @param request - directory path to register.
+   * Create or resolve one Workspace over an existing directory or an inventory
+   * device. A device request stores its artifacts under the Harness home's
+   * `devices/<id>` directory and records the device target on the workspace;
+   * re-adopting the same device is idempotent and refreshes inventory facts.
+   * @param request - directory path or device target to register.
+   * @param signal - caller lifetime; cancels inventory validation.
    * @returns the Workspace and whether this call created it.
    */
-  create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
+  create(request: WorkspaceCreateRequest, signal?: AbortSignal): Promise<WorkspaceCreateValue> {
     return this.enqueue(async () => {
+      if ((request.path === undefined) === (request.target === undefined)) {
+        throw new RemoteError(
+          'gateway/bad-request',
+          'Workspace create requires exactly one of path or target',
+          {},
+        )
+      }
       try {
+        if (request.target !== undefined) return await this.createDevice(request.target, request.title, signal)
         const existing = await this.ctx.workspaceRegistry.resolveByPath(request.path)
         if (existing !== undefined) {
+          if (request.title !== undefined && request.title !== existing.title) {
+            await existing.setTitle(request.title)
+          }
           return { workspace: workspaceView(existing), created: false }
         }
-        const workspace = await this.ctx.workspaceRegistry.create(request.path)
+        const workspace = await this.ctx.workspaceRegistry.create(request.path, request.title)
         return { workspace: workspaceView(workspace), created: true }
       } catch (error) {
         if (remoteErrorOf(error) !== undefined) throw error
+        const subject = request.target !== undefined ? request.target.deviceId : request.path
         throw new RemoteError(
           'workspace/invalid-path',
-          `cannot create a Workspace at "${request.path}": ${errorMessage(error)}`,
-          { path: request.path },
+          `cannot create a Workspace for "${subject}": ${errorMessage(error)}`,
+          { path: subject },
           { cause: error },
         )
       }
     })
+  }
+
+  /**
+   * Adopt or refresh one device workspace under the Harness home.
+   * @param target - inventory device facts selected by the caller.
+   * @param title - optional user-facing title; omitted on an existing row keeps the stored title.
+   * @param signal - caller lifetime for inventory validation.
+   * @returns the device workspace and whether this call created it.
+   */
+  private async createDevice(
+    target: WorkspaceTarget,
+    title: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<WorkspaceCreateValue> {
+    const resolved = await this.resolveTarget(target, signal)
+    const safeId = resolved.deviceId.replace(/[^a-zA-Z0-9_.-]/gu, '_')
+    const directory = dshHomePath('devices', safeId)
+    await mkdir(directory, { recursive: true })
+
+    const existing = this.ctx.workspaceRegistry.findByDevice(resolved.deviceId)
+      ?? await this.ctx.workspaceRegistry.resolveByPath(directory)
+    const displayTitle = title ?? deviceTitle(resolved)
+    const workspace = existing ?? await this.ctx.workspaceRegistry.create(directory, displayTitle, resolved)
+    if (existing !== undefined) {
+      const previousTitle = existing.target === undefined ? undefined : deviceTitle(existing.target)
+      if (!sameTarget(existing.target, resolved)) await existing.setTarget(resolved)
+      if (title !== undefined && title !== existing.title) await existing.setTitle(title)
+      // An untouched automatic title follows inventory renames; a user title stays.
+      else if (title === undefined && existing.title === previousTitle && displayTitle !== existing.title) {
+        await existing.setTitle(displayTitle)
+      }
+    }
+    await this.writeMarker(workspace, directory, resolved)
+    return { workspace: workspaceView(workspace), created: existing === undefined }
+  }
+
+  /**
+   * Confirm the selected device still exists in inventory and refresh its
+   * display facts. A composition without the inventory Remote keeps the
+   * caller-supplied target, so workspace creation never depends on that row.
+   * @param target - selected device facts.
+   * @param signal - caller lifetime.
+   * @returns the inventory-backed target when available.
+   */
+  private async resolveTarget(target: WorkspaceTarget, signal?: AbortSignal): Promise<WorkspaceTarget> {
+    const controller = this.ctx.get('deviceController')
+    if (controller === undefined) return target
+    const device = await controller.get({ deviceId: target.deviceId }, signal ?? new AbortController().signal)
+    return {
+      kind: 'device',
+      deviceId: device.id,
+      name: device.name,
+      ...device.vendor === '' ? {} : { vendor: device.vendor },
+      ...device.driverType === '' ? {} : { driverType: device.driverType },
+      ...device.host === '' ? {} : { host: device.host },
+      ...device.port === undefined ? {} : { port: device.port },
+      ...device.sshPort === undefined ? {} : { sshPort: device.sshPort },
+    }
+  }
+
+  /** Publish the derived device marker; a failure is warned because the workspace record is authoritative. */
+  private async writeMarker(workspace: Workspace, directory: string, target: WorkspaceTarget): Promise<void> {
+    try {
+      await writeDeviceMarker(directory, {
+        id: target.deviceId,
+        title: workspace.title,
+        deviceUri: `device://${target.deviceId}`,
+        ...target.vendor === undefined ? {} : { vendor: target.vendor },
+        ...target.driverType === undefined ? {} : { driverType: target.driverType },
+        ...target.host === undefined ? {} : { host: target.host },
+        ...target.port === undefined ? {} : { port: target.port },
+        ...target.sshPort === undefined ? {} : { sshPort: target.sshPort },
+        workspaceId: String(workspace.id),
+        updatedAt: new Date().toISOString(),
+      })
+    } catch (error: unknown) {
+      this.ctx.logger.warn(`workspace '${workspace.id}' device marker could not be written: ${String(error)}`)
+    }
   }
 
   /**
@@ -245,6 +343,23 @@ function workspaceNotFound(workspaceId: WorkspaceId): RemoteError<'workspace/not
     `Workspace "${workspaceId}" not found`,
     { workspaceId },
   )
+}
+
+/** Display title for a newly adopted device. */
+function deviceTitle(target: WorkspaceTarget): string {
+  return target.vendor === undefined || target.vendor === '' ? target.name : `${target.name} (${target.vendor})`
+}
+
+/** Whether two targets carry the same inventory facts, ignoring object identity. */
+function sameTarget(left: WorkspaceTarget | undefined, right: WorkspaceTarget): boolean {
+  return left !== undefined
+    && left.deviceId === right.deviceId
+    && left.name === right.name
+    && left.vendor === right.vendor
+    && left.driverType === right.driverType
+    && left.host === right.host
+    && left.port === right.port
+    && left.sshPort === right.sshPort
 }
 
 function errorMessage(error: unknown): string {

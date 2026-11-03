@@ -40,6 +40,31 @@ pnpm dsh web
 
 `pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
 
+### Network operations profile
+
+This checkout ships a first-class `netops` profile. It replaces the coding preset with a network-operations assistant, keeps chat, device workspaces, files, and the SSH terminal, and removes coding, document, feedback, and automation chrome:
+
+```sh
+pnpm start:netops
+```
+
+The profile mounts `@deepseek-ai/dsh-netops-app` over the web surface. Connection facts come from environment variables:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `POLYGLOT_API_URL` | Polyglot HTTP API base URL | `http://127.0.0.1:8080` |
+| `POLYGLOT_WS_URL` | Device console WebSocket base URL | derived from the API URL |
+| `POLYGLOT_API_TOKEN` | Inventory bearer token | none |
+| `POLYGLOT_MCP_URL` | MCP endpoint | `<api>/mcp` |
+| `POLYGLOT_MCP_TOKEN` | MCP bearer token | none |
+| `POLYGLOT_WS_TOKEN` | Device console token | the MCP token |
+
+The Polyglot MCP server name becomes the `mcp__polyglot__<tool>` tool namespace. One optional second MCP server can be configured with `NETOPS_MCP_URL`, `NETOPS_MCP_SERVER_NAME`, and `NETOPS_MCP_TOKEN`.
+
+Device workspaces are adopted from the inventory picker. Each keeps its artifacts under `$DSH_HOME/devices/<device-id>` and opens its SSH console by default. A session's model context names the active device; the assistant still asks for confirmation before a disruptive action.
+
+`pnpm dsh web` remains the upstream coding surface; the two profiles are independent bundle compositions.
+
 ## Community and support
 
 - Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).

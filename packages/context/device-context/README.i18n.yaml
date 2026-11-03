@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/context/device-context/README.md
+/:
+  en: b2988ca2f6cb24a1
+  zh: b91de3e778283f5a
+/deepseek-ai-dsh-device-context:
+  en: 5f604586c076af88
+  zh: 3ed3eb411dddcb42
+/deepseek-ai-dsh-device-context/summary:
+  en: 126546707d797850
+  zh: 8dc8aeb240d17052
+/deepseek-ai-dsh-device-context/table-of-contents:
+  en: 4e53164159b5ce41
+  zh: 89582dc0294d0776
+/deepseek-ai-dsh-device-context/use-this-package:
+  en: f050fd9494a19edf
+  zh: 7cd9afc031786c19
+/deepseek-ai-dsh-device-context/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-device-context/model-experience/device-snapshot:
+  en: 04c20be6b77513ce
+  zh: cee9cdd8fe49fc4f
+/deepseek-ai-dsh-device-context/model-experience/device-snapshot/what-the-model-sees:
+  en: 212e13005a577598
+  zh: 96eec77e00e4c62a
+/deepseek-ai-dsh-device-context/model-experience/device-snapshot/token-effect:
+  en: 78b5794cbbedcddb
+  zh: 1d5cef52fa32b2b4
+/deepseek-ai-dsh-device-context/model-experience/device-snapshot/kv-cache-effect:
+  en: 34e9d2b1c661d9b5
+  zh: 2f9c841b3c9d8cd1
+/deepseek-ai-dsh-device-context/known-limitations-and-deferred-work:
+  en: 05d2f74f8ace99b6
+  zh: a8f3326db6e6ec44
+/deepseek-ai-dsh-device-context/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

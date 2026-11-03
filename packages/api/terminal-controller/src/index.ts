@@ -3,12 +3,16 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
+import { readDeviceMarker } from '@deepseek-ai/dsh-workspace'
+import type { WorkspaceTarget } from '@deepseek-ai/dsh-workspace'
 import { Remote, RemoteError, TypertRemoteService, type RemoteStream } from '@deepseek-ai/dsh-typert-protocol'
 import { discoverShells, resolveShell } from './shells.ts'
 import { BrowserTerminal } from './terminal.ts'
 import { TerminalRetention } from './retention.ts'
+import { DeviceTerminalHandle } from './device-terminal.ts'
 import type {
   TerminalShell, TerminalInput, TerminalCreateRequest, TerminalEnvironment, TerminalFrame, TerminalRetentionFrame,
   WebTerminalId, WebTerminalInfo,
@@ -21,6 +25,20 @@ declare module '@deepseek-ai/cordis' {
     /** Interactive user terminals, separate from the Agent terminal tool registry. */
     terminalController: TerminalController
   }
+}
+
+/** Device console connection values; the console proxies one inventory device's SSH PTY. */
+export interface DeviceConsoleConfig {
+  /** Whether device workspaces expose an SSH console. */
+  readonly enabled: boolean
+  /** Polyglot WebSocket base URL. */
+  readonly wsBaseUrl: string
+  /** Optional bearer token appended to the WebSocket URL. */
+  readonly token?: string
+  /** Maximum time to wait for the socket to open. */
+  readonly connectTimeoutMs: number
+  /** Whether a create without an explicit shell selects the device console. */
+  readonly default: boolean
 }
 
 /** Deployment limits and an optional shell profile. */
@@ -56,6 +74,8 @@ export interface Config {
   readonly activityPollIntervalMs: number
   /** Delay before retrying failed owned terminal cleanup. */
   readonly cleanupRetryMs: number
+  /** Device console connection; omitted values keep the console disabled. */
+  readonly deviceConsole?: DeviceConsoleConfig
 }
 
 interface TerminalAllocation {
@@ -90,10 +110,18 @@ export class TerminalController extends TypertRemoteService {
     unattendedTimeoutMs: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(7_200_000),
     activityPollIntervalMs: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(30_000),
     cleanupRetryMs: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(60_000),
+    deviceConsole: z.object({
+      enabled: z.boolean().default(false),
+      wsBaseUrl: z.string().default('ws://127.0.0.1:8080'),
+      token: z.string(),
+      connectTimeoutMs: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(10_000),
+      default: z.boolean().default(false),
+    }),
   })
 
   private readonly owners = new Map<SessionId, OwnedSession>()
   private readonly lifetime = new AbortController()
+  private readonly deviceConsole: DeviceConsoleConfig
 
   /**
    * @param ctx - Host context carrying typed Remote and execution providers.
@@ -101,6 +129,14 @@ export class TerminalController extends TypertRemoteService {
    */
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'terminalController', { namespace: 'terminal' })
+    const device = config.deviceConsole
+    this.deviceConsole = {
+      enabled: device?.enabled ?? false,
+      wsBaseUrl: device?.wsBaseUrl ?? 'ws://127.0.0.1:8080',
+      ...device?.token === undefined || device.token === '' ? {} : { token: device.token },
+      connectTimeoutMs: device?.connectTimeoutMs ?? 10_000,
+      default: device?.default ?? false,
+    }
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('Terminal controller disposed'))
       const results = await Promise.allSettled([...this.owners].map(([id, owner]) => this.disposeOwner(id, owner)))
@@ -133,7 +169,13 @@ export class TerminalController extends TypertRemoteService {
   @Remote
   shells(agent: Agent, signal: AbortSignal): Promise<TerminalShell[]> {
     signal.throwIfAborted()
-    return discoverShells(this.execution(agent).subprocess, this.config.shell, this.config.shellCandidates, signal)
+    return (async () => {
+      const { subprocess, workingDirectory } = this.execution(agent)
+      const cwd = workingDirectory.get(agent.session)
+      const target = await this.deviceTarget(cwd)
+      const base = await discoverShells(subprocess, this.config.shell, this.config.shellCandidates, signal)
+      return target === undefined ? base : [consoleShell(target), ...base]
+    })()
   }
 
   /**
@@ -310,21 +352,86 @@ export class TerminalController extends TypertRemoteService {
     return { subprocess, sandboxPolicy, workingDirectory }
   }
 
+  /**
+   * Resolve the device target of a workspace directory. The workspace record is
+   * authoritative; the on-disk marker is a fallback for a directory whose
+   * registration is unavailable in this composition.
+   * @param cwd - current Session directory.
+   * @returns the device target, or undefined for a plain directory workspace.
+   */
+  private async deviceTarget(cwd: string): Promise<WorkspaceTarget | undefined> {
+    if (!this.deviceConsole.enabled) return undefined
+    const registry = this.ctx.get('workspaceRegistry')
+    if (registry !== undefined) {
+      try {
+        const workspace = await registry.resolveByPath(cwd)
+        if (workspace?.target !== undefined) return workspace.target
+      } catch (error: unknown) {
+        this.ctx.logger.warn(`terminal: workspace lookup for '${cwd}' failed: ${String(error)}`)
+      }
+    }
+    try {
+      const marker = await readDeviceMarker(cwd)
+      if (marker === undefined) return undefined
+      return {
+        kind: 'device',
+        deviceId: marker.id,
+        name: marker.title ?? marker.id,
+        ...marker.vendor === undefined ? {} : { vendor: marker.vendor },
+        ...marker.driverType === undefined ? {} : { driverType: marker.driverType },
+        ...marker.host === undefined ? {} : { host: marker.host },
+        ...marker.port === undefined ? {} : { port: marker.port },
+        ...marker.sshPort === undefined ? {} : { sshPort: marker.sshPort },
+      }
+    } catch (error: unknown) {
+      this.ctx.logger.warn(`terminal: device marker in '${cwd}' is unreadable: ${String(error)}`)
+      return undefined
+    }
+  }
+
   private async spawn(agent: Agent, owner: OwnedSession, request: TerminalCreateRequest, signal: AbortSignal): Promise<BrowserTerminal> {
     const { subprocess, workingDirectory } = this.execution(agent)
     const cwd = await workingDirectory.ensure(agent, signal)
-    const shell = request.shellPath === undefined
-      ? await resolveShell(subprocess, this.config.shell, signal)
-      : (await this.shells(agent, signal)).find(candidate => candidate.path === request.shellPath)
-    if (shell === undefined) throw new Error('Selected shell is not available in this execution environment')
-    const handle = await subprocess.spawnTerminal({
-      argv: [shell.path, ...shell.args], cwd, cols: request.cols, rows: request.rows,
-      terminalType: 'xterm-256color', env: { DSH_SESSION_ID: agent.id },
-      shellActivity: true,
-      graceMs: this.config.disposeGraceMs, signal,
-    })
+    const target = await this.deviceTarget(cwd)
+    const wantsConsole = request.shellPath === DEVICE_CONSOLE_PATH
+      || (request.shellPath === undefined && this.deviceConsole.default)
+    if (request.shellPath === DEVICE_CONSOLE_PATH && target === undefined) {
+      throw new Error('Selected device console is not available in this workspace')
+    }
+
+    let handle: SubprocessTerminalHandle
+    let shell: TerminalShell
+    let title: string
+
+    if (wantsConsole && target !== undefined) {
+      shell = consoleShell(target)
+      title = shell.name
+      handle = new DeviceTerminalHandle({
+        deviceId: target.deviceId,
+        wsBaseUrl: this.deviceConsole.wsBaseUrl,
+        ...this.deviceConsole.token === undefined ? {} : { token: this.deviceConsole.token },
+        connectTimeoutMs: this.deviceConsole.connectTimeoutMs,
+        cols: request.cols,
+        rows: request.rows,
+        signal,
+      })
+    } else {
+      const resolved = request.shellPath === undefined
+        ? await resolveShell(subprocess, this.config.shell, signal)
+        : (await this.shells(agent, signal)).find(candidate => candidate.path === request.shellPath)
+      if (resolved === undefined) throw new Error('Selected shell is not available in this execution environment')
+      shell = resolved
+      title = shell.name
+      handle = await subprocess.spawnTerminal({
+        argv: [shell.path, ...shell.args], cwd, cols: request.cols, rows: request.rows,
+        terminalType: 'xterm-256color', env: { DSH_SESSION_ID: agent.id },
+        shellActivity: true,
+        graceMs: this.config.disposeGraceMs, signal,
+      })
+    }
+
     const info: WebTerminalInfo = {
-      id: request.id, shell, title: shell.name, cwd,
+      id: request.id, shell, title, cwd,
       cols: request.cols, rows: request.rows, state: 'running', exitCode: null,
     }
     try {
@@ -346,6 +453,23 @@ export class TerminalController extends TypertRemoteService {
       }
       throw error
     }
+  }
+}
+
+/** Shell path that selects the device SSH console instead of a local shell. */
+export const DEVICE_CONSOLE_PATH = 'device://console'
+
+/**
+ * Project one device target as the selector entry the browser renders.
+ * @param target - adopted device facts.
+ * @returns a device console shell profile.
+ */
+function consoleShell(target: WorkspaceTarget): TerminalShell {
+  return {
+    path: DEVICE_CONSOLE_PATH,
+    args: [],
+    name: `${target.name} (SSH)`,
+    kind: 'device',
   }
 }
 
