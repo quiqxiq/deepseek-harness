@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-device-controller",
   "description": "Host Remote owner for the network device inventory that backs device workspaces",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },

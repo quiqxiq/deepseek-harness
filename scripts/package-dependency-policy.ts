@@ -53,6 +53,10 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
 const SAFE_HOST_DEPENDENCY_EXPORTS = {
   '@deepseek-ai/dsh-credentials': ['credentialKey'],
   '@deepseek-ai/dsh-deque': ['Deque'],
+  // Builds a dispatcher from the resolved proxy policy; the caller owns and closes it.
+  '@deepseek-ai/dsh-http-proxy': ['createRouteDispatcher'],
+  // The shipped profile templates are plain data; a consumer reads their bundle names only.
+  '@deepseek-ai/dsh-official-bundles': ['PROFILE_TEMPLATES'],
   '@deepseek-ai/dsh-llm': ['callConfigEquals'],
   '@deepseek-ai/dsh-session-format': ['sessionFormatLogFilename'],
   '@deepseek-ai/dsh-timeout': ['MAX_TIMER_DELAY_MS'],
