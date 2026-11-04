@@ -6,6 +6,9 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { PreToolDecision, ToolExecution, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import {
   isReadOnlyTool,
+  isSystemTool,
+  isDeviceTool,
+  isDeviceFullAccess,
   isDangerFullAccess,
   applyApprovalGuard,
 } from '../src/approval-guard.ts'
@@ -30,6 +33,33 @@ function mockExec(name: string, agent?: Agent): ToolExecution {
     ...(agent !== undefined ? { agent } : {}),
   }
 }
+
+describe('tool classifications', () => {
+  it('correctly classifies host system tools', () => {
+    expect(isSystemTool('bash')).toBe(true)
+    expect(isSystemTool('pwsh')).toBe(true)
+    expect(isSystemTool('write')).toBe(true)
+    expect(isSystemTool('edit')).toBe(true)
+    expect(isSystemTool('apply_patch')).toBe(true)
+
+    expect(isSystemTool('routeros_run')).toBe(false)
+    expect(isSystemTool('mcp__polyglot__routeros_run')).toBe(false)
+    expect(isSystemTool('read')).toBe(false)
+  })
+
+  it('correctly classifies network device tools', () => {
+    expect(isDeviceTool('mcp__polyglot__routeros_run')).toBe(true)
+    expect(isDeviceTool('routeros_run')).toBe(true)
+    expect(isDeviceTool('routeros_suggest')).toBe(true)
+    expect(isDeviceTool('olt_register_onu')).toBe(true)
+    expect(isDeviceTool('run_command')).toBe(true)
+    expect(isDeviceTool('push_config')).toBe(true)
+
+    expect(isDeviceTool('bash')).toBe(false)
+    expect(isDeviceTool('write')).toBe(false)
+    expect(isDeviceTool('edit')).toBe(false)
+  })
+})
 
 describe('isReadOnlyTool', () => {
   it('correctly classifies standard read and inspection tools as read-only', () => {
@@ -84,7 +114,18 @@ describe('isReadOnlyTool', () => {
   })
 })
 
-describe('isDangerFullAccess', () => {
+describe('isDeviceFullAccess / isDangerFullAccess', () => {
+  it('detects device-full-access from permissionPresets service', () => {
+    const ctx = new Context()
+    ctx.provide('permissionPresets', {
+      current: (_session: Session) => 'device-full-access',
+    } as never)
+
+    const exec = mockExec('mcp__polyglot__routeros_run', createStubAgent())
+    expect(isDeviceFullAccess(ctx, exec)).toBe(true)
+    expect(isDangerFullAccess(ctx, exec)).toBe(true)
+  })
+
   it('detects danger-full-access from permissionPresets service', () => {
     const ctx = new Context()
     ctx.provide('permissionPresets', {
@@ -92,6 +133,7 @@ describe('isDangerFullAccess', () => {
     } as never)
 
     const exec = mockExec('write', createStubAgent())
+    expect(isDeviceFullAccess(ctx, exec)).toBe(true)
     expect(isDangerFullAccess(ctx, exec)).toBe(true)
   })
 
@@ -102,6 +144,7 @@ describe('isDangerFullAccess', () => {
     } as never)
 
     const exec = mockExec('write', createStubAgent())
+    expect(isDeviceFullAccess(ctx, exec)).toBe(false)
     expect(isDangerFullAccess(ctx, exec)).toBe(false)
   })
 
@@ -112,6 +155,7 @@ describe('isDangerFullAccess', () => {
     } as never)
 
     const exec = mockExec('write')
+    expect(isDeviceFullAccess(ctx, exec)).toBe(true)
     expect(isDangerFullAccess(ctx, exec)).toBe(true)
   })
 })
@@ -134,7 +178,7 @@ describe('applyApprovalGuard', () => {
     expect(decision).toEqual({ kind: 'allow' })
   })
 
-  it('requires approval for mutating operations in workspace-write mode', async () => {
+  it('requires approval for both device and host mutating operations in workspace-write mode', async () => {
     const ctx = new Context()
     ctx.provide('permissionPresets', {
       current: () => 'workspace-write',
@@ -169,14 +213,14 @@ describe('applyApprovalGuard', () => {
     expect(decisionBash.kind).toBe('ask')
   })
 
-  it('allows mutating operations directly without asking in danger-full-access mode', async () => {
+  it('allows device mutating operations directly while keeping host operations protected in device-full-access mode', async () => {
     const ctx = new Context()
     ctx.provide('permissionPresets', {
-      current: () => 'danger-full-access',
+      current: () => 'device-full-access',
     } as never)
     applyApprovalGuard(ctx)
 
-    // routeros_run in full access
+    // routeros_run in device-full-access: auto-allowed without asking!
     const execRun = mockExec('mcp__polyglot__routeros_run', createStubAgent())
     const decisionRun = await ctx.waterfall(
       'tools/pre-execute',
@@ -185,14 +229,54 @@ describe('applyApprovalGuard', () => {
     )
     expect(decisionRun).toEqual({ kind: 'allow' })
 
-    // write in full access
+    // olt_register_onu in device-full-access: auto-allowed without asking!
+    const execOlt = mockExec('mcp__polyglot__olt_register_onu', createStubAgent())
+    const decisionOlt = await ctx.waterfall(
+      'tools/pre-execute',
+      execOlt,
+      () => Promise.resolve<PreToolDecision>({ kind: 'allow' }),
+    )
+    expect(decisionOlt).toEqual({ kind: 'allow' })
+
+    // write in device-full-access: MUST STILL ASK (host is protected!)
     const execWrite = mockExec('write', createStubAgent())
     const decisionWrite = await ctx.waterfall(
       'tools/pre-execute',
       execWrite,
       () => Promise.resolve<PreToolDecision>({ kind: 'allow' }),
     )
-    expect(decisionWrite).toEqual({ kind: 'allow' })
+    expect(decisionWrite.kind).toBe('ask')
+
+    // bash in device-full-access: MUST STILL ASK (host is protected!)
+    const execBash = mockExec('bash', createStubAgent())
+    const decisionBash = await ctx.waterfall(
+      'tools/pre-execute',
+      execBash,
+      () => Promise.resolve<PreToolDecision>({ kind: 'allow' }),
+    )
+    expect(decisionBash.kind).toBe('ask')
+  })
+
+  it('allows host operations only when DSH_ALLOW_HOST_MUTATION_WITHOUT_APPROVAL is set', async () => {
+    const origEnv = process.env.DSH_ALLOW_HOST_MUTATION_WITHOUT_APPROVAL
+    try {
+      process.env.DSH_ALLOW_HOST_MUTATION_WITHOUT_APPROVAL = 'true'
+      const ctx = new Context()
+      ctx.provide('permissionPresets', {
+        current: () => 'device-full-access',
+      } as never)
+      applyApprovalGuard(ctx)
+
+      const execWrite = mockExec('write', createStubAgent())
+      const decisionWrite = await ctx.waterfall(
+        'tools/pre-execute',
+        execWrite,
+        () => Promise.resolve<PreToolDecision>({ kind: 'allow' }),
+      )
+      expect(decisionWrite).toEqual({ kind: 'allow' })
+    } finally {
+      process.env.DSH_ALLOW_HOST_MUTATION_WITHOUT_APPROVAL = origEnv
+    }
   })
 
   it('preserves downstream denial decisions', async () => {

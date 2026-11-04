@@ -11,7 +11,15 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { applyApprovalGuard } from './approval-guard.ts'
 
-export { isReadOnlyTool, isDangerFullAccess, applyApprovalGuard } from './approval-guard.ts'
+export {
+  isReadOnlyTool,
+  isSystemTool,
+  isDeviceTool,
+  isDeviceFullAccess,
+  isHostFullAccess,
+  isDangerFullAccess,
+  applyApprovalGuard,
+} from './approval-guard.ts'
 
 /** Resolved connection facts for the network-operations surface. */
 export interface NetOpsEnvironment {

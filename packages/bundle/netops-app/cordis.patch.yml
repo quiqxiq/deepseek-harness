@@ -21,6 +21,15 @@
       change, restart, session reset, route withdrawal), state the target,
       expected impact, and rollback, then ask for explicit confirmation.
 
+      ROUTEROS COMMAND PROTOCOL (MANDATORY):
+      1. TOOL SELECTION: For MikroTik RouterOS devices, NEVER call `run_command`. Always use `routeros_*` tools (`routeros_run`, `routeros_suggest`, `routeros_validate`, `routeros_describe_command`, `routeros_list_menu`).
+      2. ZERO GUESSING & DISCOVERY FIRST: Never guess RouterOS menu hierarchy, command syntax, or parameter values.
+         - Call `routeros_list_menu` to explore available submenus and commands at any path.
+         - Call `routeros_suggest` to discover dynamic arguments (interface names, IP pools, profile names).
+         - Call `routeros_describe_command` to inspect required vs optional parameters and types.
+      3. PRE-FLIGHT VALIDATION: Always call `routeros_validate` with the full console command line to dry-run syntax before calling `routeros_run`.
+      4. FAILURE REMEDIATION (NO-LOOP RULE): If `routeros_run` or `routeros_validate` returns an error (such as "no such command", syntax failure, or validation error), you are STRICTLY FORBIDDEN from immediately retrying `routeros_run` or `run_command`. You MUST call `routeros_suggest` or `routeros_describe_command` to inspect the valid options, fix the mistake, and re-validate before executing.
+
 - id: preset-standard
   config:
     id: standard
@@ -40,6 +49,15 @@
             command syntax that the available tools do not expose. If a tool is
             unavailable, say what is missing and propose an alternative check
             instead of guessing.
+
+            ROUTEROS COMMAND PROTOCOL (MANDATORY):
+            1. TOOL SELECTION: For MikroTik RouterOS devices, NEVER call `run_command`. Always use `routeros_*` tools (`routeros_run`, `routeros_suggest`, `routeros_validate`, `routeros_describe_command`, `routeros_list_menu`).
+            2. ZERO GUESSING & DISCOVERY FIRST: Never guess RouterOS menu hierarchy, command syntax, or parameter values.
+               - Call `routeros_list_menu` to explore available submenus and commands at any path.
+               - Call `routeros_suggest` to discover dynamic arguments (interface names, IP pools, profile names).
+               - Call `routeros_describe_command` to inspect required vs optional parameters and types.
+            3. PRE-FLIGHT VALIDATION: Always call `routeros_validate` with the full console command line to dry-run syntax before calling `routeros_run`.
+            4. FAILURE REMEDIATION (NO-LOOP RULE): If `routeros_run` or `routeros_validate` returns an error (such as "no such command", syntax failure, or validation error), you are STRICTLY FORBIDDEN from immediately retrying `routeros_run` or `run_command`. You MUST call `routeros_suggest` or `routeros_describe_command` to inspect the valid options, fix the mistake, and re-validate before executing.
           complete: true
           includeRuntimeContext: false
       - id: time-context
@@ -144,6 +162,22 @@
   disabled: true
 - id: preset-cordis
   disabled: true
+
+- id: permission
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      device-full-access:
+        sandbox: workspace-write
+        approval: ask
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
 
 # ── 2. Connection facts ─────────────────────────────────────────────────────
 

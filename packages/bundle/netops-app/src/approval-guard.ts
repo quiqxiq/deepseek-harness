@@ -1,9 +1,11 @@
 /**
  * NetOps tool approval policy guard:
  * - Read/inspect/query tools run immediately without confirmation in all modes.
- * - Non-read operations (write, edit, bash, routeros_run, mutating MCP calls)
- *   require explicit user approval in workspace-write mode.
- * - In danger-full-access mode, all operations execute directly without confirmation.
+ * - Host system operations (bash, write, edit) always require explicit approval by default
+ *   to protect the local host environment.
+ * - Device mutations (routeros_run, push_config, OLT registration, etc.) execute directly
+ *   when device-full-access or danger-full-access mode is active, but require approval
+ *   in default workspace-write mode.
  *
  * @module @deepseek-ai/dsh-netops-app/src/approval-guard
  */
@@ -11,6 +13,47 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-permission-presets'
+
+/** Set of tools that execute mutations directly on the local host machine. */
+const SYSTEM_MUTATION_TOOLS = new Set<string>([
+  'bash',
+  'pwsh',
+  'write',
+  'edit',
+  'apply_patch',
+])
+
+/**
+ * Determine whether a tool operates on the host system (files or local shell).
+ * @param name - tool name as registered on ToolRuntime
+ * @returns true if the tool modifies the host environment
+ */
+export function isSystemTool(name: string): boolean {
+  return SYSTEM_MUTATION_TOOLS.has(name)
+}
+
+/**
+ * Determine whether a tool targets a remote network device.
+ * @param name - tool name as registered on ToolRuntime
+ * @returns true if the tool targets network devices
+ */
+export function isDeviceTool(name: string): boolean {
+  if (
+    name.startsWith('mcp__') ||
+    name.startsWith('routeros_') ||
+    name.startsWith('olt_') ||
+    name.startsWith('mikhmon_') ||
+    name === 'run_command' ||
+    name === 'push_config' ||
+    name === 'get_device_status' ||
+    name.includes('routeros_') ||
+    name.includes('olt_') ||
+    name.includes('mikhmon_')
+  ) {
+    return true
+  }
+  return false
+}
 
 /** Set of tools known to be strictly read-only and non-disruptive. */
 const READ_ONLY_TOOLS = new Set<string>([
@@ -103,18 +146,20 @@ export function isReadOnlyTool(name: string): boolean {
 }
 
 /**
- * Check whether the active execution context is in danger-full-access mode.
+ * Check whether the active execution context has device-level full access enabled.
+ * In this mode, network device operations execute directly without confirmation prompts,
+ * while local host system operations (bash, write, edit) remain strictly protected.
  * @param ctx - Cordis context
  * @param exec - live tool execution
- * @returns true if session or runtime is in full access mode
+ * @returns true if device operations can bypass approval
  */
-export function isDangerFullAccess(ctx: Context, exec: ToolExecution): boolean {
+export function isDeviceFullAccess(ctx: Context, exec: ToolExecution): boolean {
   if (exec.agent !== undefined) {
     const permissionPresets = ctx.get('permissionPresets')
     if (permissionPresets !== undefined) {
       try {
         const preset = permissionPresets.current(exec.agent.session)
-        if (preset === 'danger-full-access') {
+        if (preset === 'device-full-access' || preset === 'danger-full-access') {
           return true
         }
       } catch {
@@ -128,11 +173,39 @@ export function isDangerFullAccess(ctx: Context, exec: ToolExecution): boolean {
     return true
   }
 
-  if (process.env.DSH_PERMISSION_MODE === 'danger-full-access') {
+  const envMode = process.env.DSH_PERMISSION_MODE
+  const deviceEnvMode = process.env.DSH_DEVICE_PERMISSION_MODE
+  if (
+    envMode === 'device-full-access' ||
+    envMode === 'danger-full-access' ||
+    deviceEnvMode === 'full-access'
+  ) {
     return true
   }
 
   return false
+}
+
+/**
+ * Check whether host system tools (bash, write, edit) are permitted to execute without confirmation.
+ * By default in NetOps, host operations ALWAYS require explicit user confirmation.
+ * @param _ctx - Cordis context
+ * @param _exec - live tool execution
+ * @returns true only if host mutation approval bypass is explicitly configured
+ */
+export function isHostFullAccess(_ctx: Context, _exec: ToolExecution): boolean {
+  return process.env.DSH_ALLOW_HOST_MUTATION_WITHOUT_APPROVAL === 'true'
+}
+
+/**
+ * Check whether the active execution context is in danger-full-access mode.
+ * Maintained for backward compatibility.
+ * @param ctx - Cordis context
+ * @param exec - live tool execution
+ * @returns true if session or runtime is in full access mode
+ */
+export function isDangerFullAccess(ctx: Context, exec: ToolExecution): boolean {
+  return isDeviceFullAccess(ctx, exec)
 }
 
 /**
@@ -152,19 +225,36 @@ export function applyApprovalGuard(ctx: Context): void {
       return downstream
     }
 
-    // 2. Full-access mode: mutating operations execute directly without confirmation
-    if (isDangerFullAccess(ctx, exec)) {
+    // 2. Host system operations (bash, write, edit, apply_patch, pwsh):
+    // Local host system changes MUST require explicit user approval unless host bypass is explicitly enabled.
+    if (isSystemTool(exec.name)) {
+      if (isHostFullAccess(ctx, exec)) {
+        return downstream
+      }
+      return {
+        kind: 'ask',
+        reason: `Host system tool "${exec.name}" modifies local host files or runs local commands and requires explicit approval.`,
+        displayReason: {
+          en: `Allow execution of host system tool "${exec.name}"?`,
+          id: `Izinkan eksekusi tool sistem host "${exec.name}"?`,
+        },
+      }
+    }
+
+    // 3. Network device mutating operations (routeros_run, push_config, OLT registration, etc.):
+    // If device-level full access is active, execute directly without prompt.
+    if (isDeviceFullAccess(ctx, exec)) {
       return downstream
     }
 
-    // 3. Write / mutating operations in workspace-write (or any non-full-access mode):
-    // Require explicit approval prompt from user
+    // 4. Default mode (workspace-write or non-full-access):
+    // Device changes require explicit confirmation
     return {
       kind: 'ask',
-      reason: `Tool "${exec.name}" performs changes or execution and requires your approval.`,
+      reason: `Device tool "${exec.name}" performs network configuration changes and requires your approval.`,
       displayReason: {
-        en: `Allow execution of "${exec.name}"?`,
-        id: `Izinkan eksekusi tool "${exec.name}"?`,
+        en: `Allow execution of device tool "${exec.name}"?`,
+        id: `Izinkan eksekusi tool perangkat "${exec.name}"?`,
       },
     }
   })
