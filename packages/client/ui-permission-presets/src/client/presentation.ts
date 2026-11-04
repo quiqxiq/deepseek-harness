@@ -3,6 +3,9 @@ import { en } from './locales.ts'
 /** Machine value of the preset that requires an explicit GUI risk gate. */
 export const FULL_ACCESS_PRESET = 'danger-full-access'
 
+/** Machine value of the device full access preset. */
+export const DEVICE_FULL_ACCESS_PRESET = 'device-full-access'
+
 /** Machine value of the experimental current-session review preset. */
 export const AUTO_REVIEW_PRESET = 'auto'
 
@@ -11,17 +14,20 @@ export type PermissionPresetLabelKey =
   | 'preset.readOnly'
   | 'preset.workspaceWrite'
   | 'preset.fullAccess'
+  | 'preset.deviceFullAccess'
 
 const PRESET_LABEL_KEYS = new Map<string, PermissionPresetLabelKey>([
   ['read-only', 'preset.readOnly'],
   ['workspace-write', 'preset.workspaceWrite'],
   [FULL_ACCESS_PRESET, 'preset.fullAccess'],
+  [DEVICE_FULL_ACCESS_PRESET, 'preset.deviceFullAccess'],
 ])
 
 const DEFAULT_PRESET_LABELS: Record<PermissionPresetLabelKey, string> = {
   'preset.readOnly': en['preset.readOnly'],
   'preset.workspaceWrite': en['preset.workspaceWrite'],
   'preset.fullAccess': en['preset.fullAccess'],
+  'preset.deviceFullAccess': en['preset.deviceFullAccess'],
 }
 
 /**

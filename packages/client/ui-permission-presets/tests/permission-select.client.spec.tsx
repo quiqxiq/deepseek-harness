@@ -165,6 +165,57 @@ describe('PermissionSelect', () => {
     expect(trigger().getAttribute('title')).toBe('无沙箱运行；每次原生工具调用和 PTC 内层调用前由同一模型进行实验性审查。')
   })
 
+  it('differentiates Device full access with dedicated icon and risk confirmation checkbox', async () => {
+    const catalog: PermissionCatalog = {
+      defaultPreset: 'read-only',
+      defaultOptions: [
+        { value: 'read-only', name: 'read-only' },
+        { value: 'workspace-write', name: 'workspace-write' },
+        { value: 'device-full-access', name: 'device-full-access' },
+        { value: 'danger-full-access', name: 'danger-full-access' },
+      ],
+      options: [
+        { value: 'read-only', name: 'read-only' },
+        { value: 'workspace-write', name: 'workspace-write' },
+        { value: 'device-full-access', name: 'device-full-access' },
+        { value: 'danger-full-access', name: 'danger-full-access' },
+      ],
+    }
+    const { select, selection } = setup({ catalog })
+    fireEvent.click(trigger())
+
+    const deviceOption = screen.getByRole('menuitem', { name: '设备完全权限' })
+    const fullOption = screen.getByRole('menuitem', { name: '完全权限' })
+    expect(deviceOption).not.toBeNull()
+    expect(fullOption).not.toBeNull()
+
+    const deviceGlyph = deviceOption.querySelector('svg[aria-hidden="true"]')
+    const fullGlyph = fullOption.querySelector('svg[aria-hidden="true"]')
+    expect(deviceGlyph).not.toBeNull()
+    expect(fullGlyph).not.toBeNull()
+    expect(deviceGlyph!.innerHTML).not.toBe(fullGlyph!.innerHTML)
+
+    fireEvent.click(deviceOption)
+    const dialog = screen.getByRole('dialog', { name: '确认启用设备完全权限？' })
+    expect(dialog.textContent).toContain('受管网络设备')
+    expect(dialog.textContent).toContain('本地主机环境仍受沙箱保护')
+
+    const enableButton = screen.getByRole<HTMLButtonElement>('button', { name: '启用设备完全权限' })
+    expect(enableButton.disabled).toBe(true)
+
+    const checkbox = screen.getByRole('checkbox', { name: '我已了解设备变更风险，并愿意继续' })
+    fireEvent.click(checkbox)
+    expect(enableButton.disabled).toBe(false)
+
+    fireEvent.click(enableButton)
+    expect(select).toHaveBeenCalledExactlyOnceWith('device-full-access')
+
+    act(() => { selection.set({ value: { currentValue: 'device-full-access' } }) })
+    await act(async () => {})
+    expect(trigger().getAttribute('aria-label')).toBe('访问模式，当前：设备完全权限')
+    expect(trigger().textContent).toBe('设备完全权限')
+  })
+
   it('revokes open UI when locked or either source disappears', () => {
     const locked = setup()
     fireEvent.click(trigger())

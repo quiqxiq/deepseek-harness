@@ -46,6 +46,17 @@ function AutoReviewArtwork({ size = 16, className, strokeWidth }: PermissionIcon
   )
 }
 
+function DeviceFullAccessArtwork({ size = 16, className, strokeWidth }: PermissionIconArtworkProps): ReactNode {
+  return (
+    <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+      <path d="M6.59624 2.14853C7.50155 1.80917 8.49914 1.80919 9.40444 2.14859L13.9245 3.84317V7.11961C13.9245 11.6089 10.5565 13.5975 8.00035 14.5779C5.44423 13.5975 2.07544 11.6089 2.07544 7.11961V3.84317L6.59624 2.14853Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M5.5 7.2H10.5C10.8 7.2 11 7.4 11 7.7V9.5C11 9.8 10.8 10 10.5 10H5.5C5.2 10 5 9.8 5 9.5V7.7C5 7.4 5.2 7.2 5.5 7.2Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M6.5 5.2V7.2M9.5 5.2V7.2" stroke="currentColor" strokeLinecap="round" />
+      <path d="M6.5 8.6H6.51M8 8.6H8.01M9.5 8.6H9.51" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /**
  * Render the read-only permission icon with a one-pixel stroke.
  * @param props - Size and optional class.
@@ -116,4 +127,22 @@ export function PermissionIconAutoReviewRegular(props: IconProps): ReactNode {
  */
 export function PermissionIconAutoReviewMedium(props: IconProps): ReactNode {
   return <AutoReviewArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+}
+
+/**
+ * Render the device-full-access permission icon with a one-pixel stroke.
+ * @param props - Size and optional class.
+ * @returns The regular decorative permission glyph.
+ */
+export function PermissionIconDeviceFullAccessRegular(props: IconProps): ReactNode {
+  return <DeviceFullAccessArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+}
+
+/**
+ * Render the device-full-access permission icon with a 1.3px stroke.
+ * @param props - Size and optional class.
+ * @returns The medium decorative permission glyph.
+ */
+export function PermissionIconDeviceFullAccessMedium(props: IconProps): ReactNode {
+  return <DeviceFullAccessArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 }

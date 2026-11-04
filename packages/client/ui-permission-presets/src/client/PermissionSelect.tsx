@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronDownOutlineRegular, Menu, PermissionIconAutoReviewRegular, PermissionIconFullAccessRegular,
+  IconChevronDownOutlineRegular, Menu, PermissionIconAutoReviewRegular,
+  PermissionIconDeviceFullAccessRegular, PermissionIconFullAccessRegular,
   PermissionIconReadOnlyRegular, PermissionIconWorkspaceWriteRegular, RiskConfirmation,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -17,6 +18,7 @@ import type { PermissionCatalogState } from './catalog.ts'
 import { PERMISSION_ACCESS_NS } from './locales.ts'
 import {
   AUTO_REVIEW_PRESET as AUTO_REVIEW,
+  DEVICE_FULL_ACCESS_PRESET as DEVICE_FULL_ACCESS,
   displayPermissionPreset,
   FULL_ACCESS_PRESET as FULL_ACCESS,
 } from './presentation.ts'
@@ -29,6 +31,7 @@ const permissionGlyphs = new Map<string, ReactNode>([
   ['read-only', <PermissionIconReadOnlyRegular />],
   ['workspace-write', <PermissionIconWorkspaceWriteRegular />],
   [FULL_ACCESS, <PermissionIconFullAccessRegular />],
+  [DEVICE_FULL_ACCESS, <PermissionIconDeviceFullAccessRegular />],
   [AUTO_REVIEW, <PermissionIconAutoReviewRegular />],
 ])
 
@@ -130,7 +133,7 @@ export function PermissionSelect({
   const choose = (id: string): void => {
     setOpen(false)
     if (id === selection.currentValue) return
-    if (id === FULL_ACCESS || id === AUTO_REVIEW) {
+    if (id === FULL_ACCESS || id === DEVICE_FULL_ACCESS || id === AUTO_REVIEW) {
       setAcknowledged(false)
       setConfirmation(id)
       return
@@ -150,16 +153,24 @@ export function PermissionSelect({
 
   const confirmationTitle = confirmation === AUTO_REVIEW
     ? t('auto.confirm.title')
-    : t('confirm.title')
+    : confirmation === DEVICE_FULL_ACCESS
+      ? t('confirm.device.title')
+      : t('confirm.title')
   const confirmationDescription = confirmation === AUTO_REVIEW
     ? t('auto.confirm.description')
-    : t('confirm.description')
+    : confirmation === DEVICE_FULL_ACCESS
+      ? t('confirm.device.description')
+      : t('confirm.description')
   const confirmationAcknowledge = confirmation === AUTO_REVIEW
     ? t('auto.confirm.acknowledge')
-    : t('confirm.acknowledge')
+    : confirmation === DEVICE_FULL_ACCESS
+      ? t('confirm.device.acknowledge')
+      : t('confirm.acknowledge')
   const confirmationEnable = confirmation === AUTO_REVIEW
     ? t('auto.confirm.enable')
-    : t('confirm.enable')
+    : confirmation === DEVICE_FULL_ACCESS
+      ? t('confirm.device.enable')
+      : t('confirm.enable')
 
   return (
     <>

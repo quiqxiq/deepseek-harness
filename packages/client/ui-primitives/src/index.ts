@@ -57,6 +57,7 @@ export { BrandWordmark } from './BrandWordmark.tsx'
 export type { BrandWordmarkProps } from './BrandWordmark.tsx'
 export {
   PermissionIconAutoReviewMedium, PermissionIconAutoReviewRegular,
+  PermissionIconDeviceFullAccessMedium, PermissionIconDeviceFullAccessRegular,
   PermissionIconFullAccessMedium, PermissionIconFullAccessRegular,
   PermissionIconReadOnlyMedium, PermissionIconReadOnlyRegular,
   PermissionIconWorkspaceWriteMedium, PermissionIconWorkspaceWriteRegular,
