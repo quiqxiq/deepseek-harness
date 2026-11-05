@@ -21,14 +21,15 @@
       change, restart, session reset, route withdrawal), state the target,
       expected impact, and rollback, then ask for explicit confirmation.
 
-      ROUTEROS COMMAND PROTOCOL (MANDATORY):
-      1. TOOL SELECTION: For MikroTik RouterOS devices, NEVER call `run_command`. Always use `routeros_*` tools (`routeros_run`, `routeros_suggest`, `routeros_validate`, `routeros_describe_command`, `routeros_list_menu`).
-      2. ZERO GUESSING & DISCOVERY FIRST: Never guess RouterOS menu hierarchy, command syntax, or parameter values.
-         - Call `routeros_list_menu` to explore available submenus and commands at any path.
-         - Call `routeros_suggest` to discover dynamic arguments (interface names, IP pools, profile names).
-         - Call `routeros_describe_command` to inspect required vs optional parameters and types.
-      3. PRE-FLIGHT VALIDATION: Always call `routeros_validate` with the full console command line to dry-run syntax before calling `routeros_run`.
-      4. FAILURE REMEDIATION (NO-LOOP RULE): If `routeros_run` or `routeros_validate` returns an error (such as "no such command", syntax failure, or validation error), you are STRICTLY FORBIDDEN from immediately retrying `routeros_run` or `run_command`. You MUST call `routeros_suggest` or `routeros_describe_command` to inspect the valid options, fix the mistake, and re-validate before executing.
+      ROUTEROS COMMAND PROTOCOL:
+      1. TOOL SELECTION: For MikroTik RouterOS devices, NEVER call `run_command` or `mcp__polyglot__run_command`. Always use `routeros_*` tools (`mcp__polyglot__routeros_run`, `mcp__polyglot__routeros_suggest`, `mcp__polyglot__routeros_validate`, `mcp__polyglot__routeros_describe_command`, `mcp__polyglot__routeros_list_menu`). For basic device health/uptime snapshot, use `get_device_status`.
+      2. FAST-PATH FOR DIAGNOSTICS & COMMON COMMANDS: For standard diagnostics and read-only commands whose syntax is standard (such as `/ping address=... count=...`, `/traceroute ...`, `/interface/print`, `/ip/address/print`, `/system/resource/print`), call `routeros_run` directly without calling inspect or validate tools first. Pre-flight validation is handled automatically by the backend.
+      3. DISCOVERY FIRST WHEN UNCERTAIN: When configuring new parameters or when uncertain about exact menu hierarchy, command arguments, or dynamic values (such as interface names, IP pools, profile names):
+         - Call `routeros_list_menu` (or `mcp__polyglot__routeros_list_menu`) to explore available submenus and commands at any path.
+         - Call `routeros_suggest` (or `mcp__polyglot__routeros_suggest`) to discover dynamic arguments (interface names, IP pools, profile names).
+         - Call `routeros_describe_command` (or `mcp__polyglot__routeros_describe_command`) to inspect required vs optional parameters and types.
+         - Call `routeros_validate` (or `mcp__polyglot__routeros_validate`) to dry-run complex configuration changes if unsure about syntax.
+      4. FAILURE REMEDIATION (NO-LOOP RULE): If `routeros_run` returns an error (such as "no such command", syntax failure, or validation error), you are STRICTLY FORBIDDEN from immediately retrying `routeros_run` blindly. You MUST call `routeros_suggest` or `routeros_describe_command` to inspect the valid options, fix the mistake, and re-run.
 
 - id: preset-standard
   config:
@@ -50,14 +51,15 @@
             unavailable, say what is missing and propose an alternative check
             instead of guessing.
 
-            ROUTEROS COMMAND PROTOCOL (MANDATORY):
-            1. TOOL SELECTION: For MikroTik RouterOS devices, NEVER call `run_command`. Always use `routeros_*` tools (`routeros_run`, `routeros_suggest`, `routeros_validate`, `routeros_describe_command`, `routeros_list_menu`).
-            2. ZERO GUESSING & DISCOVERY FIRST: Never guess RouterOS menu hierarchy, command syntax, or parameter values.
-               - Call `routeros_list_menu` to explore available submenus and commands at any path.
-               - Call `routeros_suggest` to discover dynamic arguments (interface names, IP pools, profile names).
-               - Call `routeros_describe_command` to inspect required vs optional parameters and types.
-            3. PRE-FLIGHT VALIDATION: Always call `routeros_validate` with the full console command line to dry-run syntax before calling `routeros_run`.
-            4. FAILURE REMEDIATION (NO-LOOP RULE): If `routeros_run` or `routeros_validate` returns an error (such as "no such command", syntax failure, or validation error), you are STRICTLY FORBIDDEN from immediately retrying `routeros_run` or `run_command`. You MUST call `routeros_suggest` or `routeros_describe_command` to inspect the valid options, fix the mistake, and re-validate before executing.
+            ROUTEROS COMMAND PROTOCOL:
+            1. TOOL SELECTION: For MikroTik RouterOS devices, NEVER call `run_command` or `mcp__polyglot__run_command`. Always use `routeros_*` tools (`mcp__polyglot__routeros_run`, `mcp__polyglot__routeros_suggest`, `mcp__polyglot__routeros_validate`, `mcp__polyglot__routeros_describe_command`, `mcp__polyglot__routeros_list_menu`). For basic device health/uptime snapshot, use `get_device_status`.
+            2. FAST-PATH FOR DIAGNOSTICS & COMMON COMMANDS: For standard diagnostics and read-only commands whose syntax is standard (such as `/ping address=... count=...`, `/traceroute ...`, `/interface/print`, `/ip/address/print`, `/system/resource/print`), call `routeros_run` directly without calling inspect or validate tools first. Pre-flight validation is handled automatically by the backend.
+            3. DISCOVERY FIRST WHEN UNCERTAIN: When configuring new parameters or when uncertain about exact menu hierarchy, command arguments, or dynamic values (such as interface names, IP pools, profile names):
+               - Call `routeros_list_menu` (or `mcp__polyglot__routeros_list_menu`) to explore available submenus and commands at any path.
+               - Call `routeros_suggest` (or `mcp__polyglot__routeros_suggest`) to discover dynamic arguments (interface names, IP pools, profile names).
+               - Call `routeros_describe_command` (or `mcp__polyglot__routeros_describe_command`) to inspect required vs optional parameters and types.
+               - Call `routeros_validate` (or `mcp__polyglot__routeros_validate`) to dry-run complex configuration changes if unsure about syntax.
+            4. FAILURE REMEDIATION (NO-LOOP RULE): If `routeros_run` returns an error (such as "no such command", syntax failure, or validation error), you are STRICTLY FORBIDDEN from immediately retrying `routeros_run` blindly. You MUST call `routeros_suggest` or `routeros_describe_command` to inspect the valid options, fix the mistake, and re-run.
           complete: true
           includeRuntimeContext: false
       - id: time-context
