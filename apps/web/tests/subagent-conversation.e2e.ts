@@ -39,6 +39,8 @@ const MIGRATING_CHILD_EXPECTED = fileURLToPath(new URL(
 ))
 const MODE = webSnapshotMode()
 const LABEL = 'event-sourcing researcher'
+/** The live child's catalog name; it is the parent's first named child. */
+const CHILD_NAME = 'agent-1'
 const ONE_SHOT_LABEL = 'event-sourcing reviewer'
 const NESTED_LABEL = 'example editor'
 const CHILD_TITLE = 'Explain event sourcing in one'
@@ -396,7 +398,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }
   })
 
-  it('shows complete descriptions and IDs without hover at desktop and touch widths', async () => {
+  it('shows complete descriptions and names without hover at desktop and touch widths', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-catalog-labels'))
     const originalViewport = page.viewportSize()!
     const originalUrl = page.url()
@@ -408,7 +410,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
         const panel = page.locator('[data-subagent-panel]')
         const row = panel.getByRole('treeitem', { name: new RegExp(LABEL) })
         const primary = row.getByText(LABEL, { exact: true })
-        const secondary = row.getByText(childId, { exact: true })
+        const secondary = row.getByText(CHILD_NAME, { exact: true })
         const primaryBounds = await primary.boundingBox()
         const secondaryBounds = await secondary.boundingBox()
         expect(primaryBounds).not.toBeNull()
@@ -418,7 +420,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
           expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth
             && element.scrollHeight <= element.clientHeight)).toBe(true)
         }
-        expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${childId} `)
+        expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${CHILD_NAME} `)
         expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
         expect(await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(1)
         expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
@@ -774,7 +776,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       .getByRole('treeitem', { name: /Ask a research subagent to/ })
       .click()
     await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(childId, { exact: true }).click()
+    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(CHILD_NAME, { exact: true }).click()
     await page.getByRole('textbox', { name: 'Message the network assistant, / commands, @ sessions' }).waitFor()
     const forkResponse = page.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/session/fork')
@@ -803,7 +805,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     await sessions.getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
     await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(childId, { exact: true }).click()
+    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(CHILD_NAME, { exact: true }).click()
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
 
@@ -820,7 +822,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
 
     await sessions.getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
     await page.getByRole('button', { name: '2 subagents' }).press('ArrowDown')
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(childId, { exact: true }).click()
+    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(CHILD_NAME, { exact: true }).click()
     const input = page.locator('[data-composer-input][contenteditable="true"]').first()
     await input.waitFor()
     const promptResponse = page.waitForResponse(response =>
