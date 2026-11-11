@@ -2169,6 +2169,9 @@ importers:
 
   packages/bundle/netops-app:
     dependencies:
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:~
+        version: link:../../../vendor/loader
       '@deepseek-ai/dsh-api-device-controller':
         specifier: workspace:*
         version: link:../../api/device-controller

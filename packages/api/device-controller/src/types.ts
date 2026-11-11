@@ -21,6 +21,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
+/** Live management-endpoint reachability reported by inventory. */
+export type DeviceConnectivity = 'online' | 'offline' | 'unknown'
+
 /** One inventory device projected for browser consumers. */
 export interface DeviceView {
   /** Inventory identity used by device workspaces and MCP tools. */
@@ -41,6 +44,10 @@ export interface DeviceView {
   readonly tags: readonly string[]
   /** Whether inventory currently enables the device. */
   readonly enabled: boolean
+  /** Live reachability; absent when inventory did not report it. */
+  readonly connectivity?: DeviceConnectivity
+  /** Successful management-endpoint dial duration in milliseconds. */
+  readonly latencyMs?: number
 }
 
 /** Complete inventory answer for one list call. */

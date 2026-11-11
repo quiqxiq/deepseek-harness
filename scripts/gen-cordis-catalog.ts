@@ -141,6 +141,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   directoryPickerController: 'workspace.md',
   deviceController: 'workspace.md',
   netops: 'boot.md',
+  netopsPolicy: 'boot.md',
 }
 
 /**

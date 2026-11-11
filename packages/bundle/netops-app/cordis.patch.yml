@@ -184,6 +184,16 @@
 # ── 2. Connection facts ─────────────────────────────────────────────────────
 
 - insert:
+    # The emergency host-shell switch. It stays off by default; each on
+    # transition opens one bounded window, and expiry closes it without a
+    # restart. The approval guard reads this service lazily and fails closed
+    # when the row is absent.
+    - id: netops-policy
+      name: '@deepseek-ai/dsh-netops-app/policy'
+      config:
+        allowHostShellEmergency: false
+        hostShellEmergencyTtlSeconds: 300
+
     - id: netops
       name: '@deepseek-ai/dsh-netops-app'
 
@@ -303,3 +313,19 @@
   disabled: true
 - id: ui-settings-session-log
   disabled: true
+
+# DeepSeek Account is a model-provider credential flow, not access control.
+# NetOps authenticates through Polyglot and does not require DeepSeek Account login.
+- id: ui-settings-account
+  disabled: true
+- id: account-controller
+  disabled: true
+- id: deepseek-account
+  disabled: true
+- id: llm-deepseek-account
+  disabled: true
+
+# Turn off automatic first-run model credential onboarding modal
+- id: ui-settings-models
+  config:
+    credentialOnboarding: false

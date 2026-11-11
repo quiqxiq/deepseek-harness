@@ -1,8 +1,11 @@
 /**
  * NetOps tool approval policy guard:
  * - Read/inspect/query tools run immediately without confirmation in all modes.
- * - Host system operations (bash, write, edit) always require explicit approval by default
- *   to protect the local host environment.
+ * - Host filesystem mutations stay inside the sandbox: the filesystem adapter
+ *   confines writes to the workspace root, and the approval policy owns any
+ *   escalation attempt.
+ * - Host shell commands (bash, pwsh) are denied until the volatile policy service
+ *   reports an unexpired emergency window.
  * - Device mutations (routeros_run, push_config, OLT registration, etc.) execute directly
  *   when device-full-access or danger-full-access mode is active, but require approval
  *   in default workspace-write mode.
@@ -13,15 +16,38 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-permission-presets'
+import type {} from './policy.ts'
 
-/** Set of tools that execute mutations directly on the local host machine. */
-const SYSTEM_MUTATION_TOOLS = new Set<string>([
+/** Tools that execute commands on the local host machine. */
+const HOST_SHELL_TOOLS = new Set<string>([
   'bash',
   'pwsh',
+])
+
+/** Tools that mutate files on the local host machine. */
+const FILESYSTEM_MUTATION_TOOLS = new Set<string>([
   'write',
   'edit',
   'apply_patch',
 ])
+
+/**
+ * Determine whether a tool executes commands on the host system.
+ * @param name - tool name as registered on ToolRuntime
+ * @returns true if the tool runs local shell commands
+ */
+export function isHostShellTool(name: string): boolean {
+  return HOST_SHELL_TOOLS.has(name)
+}
+
+/**
+ * Determine whether a tool mutates host files.
+ * @param name - tool name as registered on ToolRuntime
+ * @returns true if the tool writes, edits, or patches local files
+ */
+export function isFilesystemMutationTool(name: string): boolean {
+  return FILESYSTEM_MUTATION_TOOLS.has(name)
+}
 
 /**
  * Determine whether a tool operates on the host system (files or local shell).
@@ -29,7 +55,7 @@ const SYSTEM_MUTATION_TOOLS = new Set<string>([
  * @returns true if the tool modifies the host environment
  */
 export function isSystemTool(name: string): boolean {
-  return SYSTEM_MUTATION_TOOLS.has(name)
+  return isHostShellTool(name) || isFilesystemMutationTool(name)
 }
 
 /**
@@ -187,14 +213,13 @@ export function isDeviceFullAccess(ctx: Context, exec: ToolExecution): boolean {
 }
 
 /**
- * Check whether host system tools (bash, write, edit) are permitted to execute without confirmation.
- * By default in NetOps, host operations ALWAYS require explicit user confirmation.
- * @param _ctx - Cordis context
- * @param _exec - live tool execution
- * @returns true only if host mutation approval bypass is explicitly configured
+ * Check whether the volatile policy currently permits host shell commands.
+ * The policy service is optional; without it the shell stays closed.
+ * @param ctx - Cordis context
+ * @returns true only while an unexpired emergency host-shell window is open
  */
-export function isHostFullAccess(_ctx: Context, _exec: ToolExecution): boolean {
-  return process.env.DSH_ALLOW_HOST_MUTATION_WITHOUT_APPROVAL === 'true'
+export function isHostShellAllowed(ctx: Context): boolean {
+  return ctx.get('netopsPolicy')?.allowsHostShell() === true
 }
 
 /**
@@ -214,9 +239,10 @@ export function isDangerFullAccess(ctx: Context, exec: ToolExecution): boolean {
  */
 export function applyApprovalGuard(ctx: Context): void {
   ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
-    // Call downstream listeners first to preserve any early deny/cancel decisions
+    // Call downstream listeners first to preserve any early deny/cancel
+    // decisions. A downstream deny or cancel stays final.
     const downstream = await next()
-    if (downstream.kind !== 'allow') {
+    if (downstream.kind === 'deny' || downstream.kind === 'cancel') {
       return downstream
     }
 
@@ -225,29 +251,32 @@ export function applyApprovalGuard(ctx: Context): void {
       return downstream
     }
 
-    // 2. Host system operations (bash, write, edit, apply_patch, pwsh):
-    // Local host system changes MUST require explicit user approval unless host bypass is explicitly enabled.
-    if (isSystemTool(exec.name)) {
-      if (isHostFullAccess(ctx, exec)) {
+    // 2. Host filesystem mutations stay inside the sandbox: the filesystem
+    // adapter enforces the workspace root, and the approval policy decides
+    // whether an out-of-workspace attempt may escalate.
+    if (isFilesystemMutationTool(exec.name)) {
+      return downstream
+    }
+
+    // 3. Host shell commands stay closed until an administrator opens a
+    // bounded emergency window through the volatile policy service.
+    if (isHostShellTool(exec.name)) {
+      if (isHostShellAllowed(ctx)) {
         return downstream
       }
       return {
-        kind: 'ask',
-        reason: `Host system tool "${exec.name}" modifies local host files or runs local commands and requires explicit approval.`,
-        displayReason: {
-          en: `Allow execution of host system tool "${exec.name}"?`,
-          id: `Izinkan eksekusi tool sistem host "${exec.name}"?`,
-        },
+        kind: 'deny',
+        reason: `Host shell tool "${exec.name}" is disabled. An administrator must open the emergency host-shell window first.`,
       }
     }
 
-    // 3. Network device mutating operations (routeros_run, push_config, OLT registration, etc.):
+    // 4. Network device mutating operations (routeros_run, push_config, OLT registration, etc.):
     // If device-level full access is active, execute directly without prompt.
     if (isDeviceFullAccess(ctx, exec)) {
       return downstream
     }
 
-    // 4. Default mode (workspace-write or non-full-access):
+    // 5. Default mode (workspace-write or non-full-access):
     // Device changes require explicit confirmation
     return {
       kind: 'ask',

@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/netops-app/README.md
 /:
-  en: 12f14e573159d2de
-  zh: 1cbbd903f9af7cb6
+  en: 8d6f20523bec85d9
+  zh: 7135261d83983828
 /deepseek-ai-dsh-netops-app:
   en: 12498ae8dded33d7
   zh: 7830ec988540636a
@@ -15,8 +15,11 @@
   en: 4e53164159b5ce41
   zh: 89582dc0294d0776
 /deepseek-ai-dsh-netops-app/use-this-package:
-  en: ea84b9ef90198caa
-  zh: 1b34cceb7297f2c0
+  en: 62e5cee3fea51c96
+  zh: 94aa32daa474b181
+/deepseek-ai-dsh-netops-app/use-this-package/customer-service-preset:
+  en: 3a3e8a7a7e984d7d
+  zh: 9601a3bcd81285ac
 /deepseek-ai-dsh-netops-app/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -30,11 +33,11 @@
   en: a7a9ea7bc710e75e
   zh: a8cb22bc54bd3fec
 /deepseek-ai-dsh-netops-app/model-experience/device-context/kv-cache-effect:
-  en: c534292b8495e3dd
+  en: 8a5d28faddc0f003
   zh: 2f9c841b3c9d8cd1
 /deepseek-ai-dsh-netops-app/known-limitations-and-deferred-work:
-  en: b04fe0f21e3d0ae0
-  zh: df2382b0409faf47
-/deepseek-ai-dsh-netops-app/dev-note:
-  en: b75c8458928b72b9
-  zh: 003ba4e17b4b5269
+  en: 0c20f26c075c3dbc
+  zh: 92d63d6691baaa09
+/deepseek-ai-dsh-netops-app/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

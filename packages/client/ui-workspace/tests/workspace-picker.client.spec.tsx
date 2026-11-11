@@ -243,6 +243,43 @@ describe('WorkspacePicker', () => {
     })
   })
 
+  it('shows registration and live connectivity status and refreshes the inventory', async () => {
+    const devices: readonly DeviceView[] = [
+      {
+        id: 'dev-online', name: 'Router-Core-CCR2004', vendor: 'MikroTik', driverType: 'mikrotik',
+        host: '10.0.0.1', tags: [], enabled: true, connectivity: 'online', latencyMs: 12,
+      },
+      {
+        id: 'dev-online-no-latency', name: 'Router-Edge', vendor: 'MikroTik', driverType: 'mikrotik',
+        host: '10.0.0.2', tags: [], enabled: true, connectivity: 'online',
+      },
+      {
+        id: 'dev-offline', name: 'Router-Backup', vendor: 'Cisco', driverType: 'cisco',
+        host: '10.0.0.3', tags: [], enabled: false, connectivity: 'offline',
+      },
+      {
+        id: 'dev-unknown', name: 'Router-Unknown', vendor: 'Juniper', driverType: 'juniper',
+        host: '10.0.0.4', tags: [], enabled: true,
+      },
+    ]
+    const listDevices = vi.fn(async () => devices)
+    mount([workspace('alpha', 'Alpha')], vi.fn(), occupancySource(), listDevices)
+
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加网络设备…' }))
+    await waitFor(() => { expect(screen.getByText('Router-Core-CCR2004')).toBeTruthy() })
+
+    expect(screen.getAllByText('活动')).toHaveLength(3)
+    expect(screen.getByText('已禁用')).toBeTruthy()
+    expect(screen.getAllByText('在线')).toHaveLength(2)
+    expect(screen.getByText('离线')).toBeTruthy()
+    expect(screen.getByText('未知')).toBeTruthy()
+    expect(screen.getByText('12 毫秒')).toBeTruthy()
+
+    expect(listDevices).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    await waitFor(() => { expect(listDevices).toHaveBeenCalledTimes(2) })
+  })
+
   it('treats flow cancellation as a silent no-op', () => {
     const b = mount([workspace('alpha', 'Alpha')])
     chooseAdd()

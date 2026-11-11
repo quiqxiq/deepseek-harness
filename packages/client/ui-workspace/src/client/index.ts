@@ -153,11 +153,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           const deviceRemote = scope.get('remote.devices') as typeof ctx.remote.devices | undefined
           if (deviceRemote === undefined) return
           const result = await deviceRemote.list()
-          if (active && result && result.ok) {
-            deviceInventory.set(true)
-          } else if (active) {
-            deviceInventory.set(false)
-          }
+          if (active) deviceInventory.set(result.ok)
         } catch {
           if (active) deviceInventory.set(false)
         }

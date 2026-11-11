@@ -156,6 +156,28 @@ Resolved connection facts for the network-operations surface.
 
 Source: [`packages/bundle/netops-app/src/index.ts`](../../packages/bundle/netops-app/src/index.ts)
 
+<a id="ctxnetopspolicy--netopspolicy"></a>
+
+### `ctx.netopsPolicy` — `NetOpsPolicy`
+
+Volatile execution policy consumed by the NetOps approval guard.
+
+```ts cordis-catalog
+/**
+ * Report whether host shell commands may run now.
+ * @returns true only while an unexpired emergency window is open.
+ */
+allowsHostShell(): boolean
+
+/**
+ * Report the remaining lifetime of the open emergency window.
+ * @returns whole seconds left, or 0 when no window is open.
+ */
+hostShellRemainingSeconds(): number
+```
+
+Source: [`packages/bundle/netops-app/src/policy.ts`](../../packages/bundle/netops-app/src/policy.ts)
+
 <a id="ctxpluginmanager--pluginmanager"></a>
 
 ### `ctx.pluginManager` — `PluginManager`

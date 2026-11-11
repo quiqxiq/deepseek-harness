@@ -18,13 +18,25 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./policy": {
+      "types": "./lib/types/policy.d.ts",
+      "default": "./lib/policy.js"
+    },
+    "./read-only-guard": {
+      "types": "./lib/types/read-only-guard.d.ts",
+      "default": "./lib/read-only-guard.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./netops-cs.patch.yml": "./netops-cs.patch.yml",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
+    "lib/policy.js",
+    "lib/read-only-guard.js",
     "cordis.patch.yml",
+    "netops-cs.patch.yml",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -34,6 +46,7 @@
     }
   },
   "dependencies": {
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-api-device-controller": "workspace:*",
     "@deepseek-ai/dsh-api-terminal-controller": "workspace:*",
     "@deepseek-ai/dsh-api-workspace-controller": "workspace:*",

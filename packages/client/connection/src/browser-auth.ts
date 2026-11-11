@@ -59,6 +59,8 @@ function decodeBase64Url(value: string): Buffer | undefined {
 }
 
 function processLaunchToken(owner: object): string {
+  const envToken = process.env.HARNESS_WEB_TOKEN ?? process.env.DSH_WEB_TOKEN
+  if (envToken !== undefined && envToken.trim() !== '') return envToken.trim()
   const existing = PROCESS_LAUNCH_TOKENS.get(owner)
   if (existing !== undefined) return existing
   const created = encodeBase64Url(randomBytes(SECRET_BYTES))

@@ -41,6 +41,8 @@ const deviceSchema = z.object({
   tags: z.array(z.string()).optional(),
   enabled: z.boolean().optional(),
   status: z.string().optional(),
+  connectivity: z.enum(['online', 'offline', 'unknown']).optional(),
+  latency_ms: z.number().int().nonnegative().optional(),
 })
 
 const listSchema = z.object({ devices: z.array(deviceSchema) })
@@ -88,6 +90,8 @@ function toView(device: z.infer<typeof deviceSchema>): DeviceView {
     ...(device.ssh_port === undefined ? {} : { sshPort: device.ssh_port }),
     tags: device.tags ?? [],
     enabled: device.enabled ?? device.status === 'active',
+    ...(device.connectivity === undefined ? {} : { connectivity: device.connectivity }),
+    ...(device.latency_ms === undefined ? {} : { latencyMs: device.latency_ms }),
   }
 }
 

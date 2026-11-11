@@ -9,6 +9,7 @@ import clsx from 'clsx'
 import {
   Button,
   IconGlobeOutlineRegular,
+  IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
   Input,
   Modal,
@@ -94,9 +95,7 @@ export function DevicePickerModal({ open, onClose, onSelect, listDevices, t }: D
     [devices, selectedId],
   )
 
-  const confirm = useCallback(() => {
-    if (selectedDevice !== null) onSelect(selectedDevice)
-  }, [selectedDevice, onSelect])
+  const refresh = useCallback(() => { void load() }, [load])
 
   return (
     <Modal
@@ -104,25 +103,41 @@ export function DevicePickerModal({ open, onClose, onSelect, listDevices, t }: D
       onClose={onClose}
       closeLabel={t('close')}
       title={t('devicePicker.title')}
-      {...css.modalDialog ? { className: css.modalDialog } : {}}
+      className={clsx(css.modalDialog)}
       footer={(
         <>
           <Button variant="outline" onClick={onClose}>{t('cancel')}</Button>
-          <Button variant="primary" disabled={selectedDevice === null} onClick={confirm}>
+          <Button
+            variant="primary"
+            disabled={selectedDevice === null}
+            onClick={selectedDevice === null ? undefined : () => { onSelect(selectedDevice) }}
+          >
             {t('devicePicker.actionAdd')}
           </Button>
         </>
       )}
     >
       <div className={css.searchWrap}>
-        <Input
-          {...css.searchInput ? { className: css.searchInput } : {}}
-          value={search}
-          onChange={(event) => { setSearch(event.target.value) }}
-          placeholder={t('devicePicker.searchPlaceholder')}
-          icon={<IconSearchOutlineRegular size={14} />}
-          data-modal-autofocus
-        />
+        <div className={css.searchRow}>
+          <Input
+            className={clsx(css.searchInput)}
+            value={search}
+            onChange={(event) => { setSearch(event.target.value) }}
+            placeholder={t('devicePicker.searchPlaceholder')}
+            icon={<IconSearchOutlineRegular size={14} />}
+            data-modal-autofocus
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className={css.refreshButton}
+            icon={loading ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={14} />}
+            disabled={loading}
+            onClick={refresh}
+          >
+            {t('devicePicker.refresh')}
+          </Button>
+        </div>
       </div>
 
       {loading && devices.length === 0 && (
@@ -149,6 +164,17 @@ export function DevicePickerModal({ open, onClose, onSelect, listDevices, t }: D
         <div className={css.deviceList} role="list" aria-label={t('devicePicker.title')}>
           {filtered.map((device) => {
             const isSelected = selectedId === device.id
+            const connectivity = device.connectivity ?? 'unknown'
+            const connectivityLabel = connectivity === 'online'
+              ? t('devicePicker.connectivityOnline')
+              : connectivity === 'offline'
+                ? t('devicePicker.connectivityOffline')
+                : t('devicePicker.connectivityUnknown')
+            const connectivityState = connectivity === 'online'
+              ? 'done'
+              : connectivity === 'offline'
+                ? 'error'
+                : 'idle'
             return (
               <button
                 key={device.id}
@@ -164,10 +190,21 @@ export function DevicePickerModal({ open, onClose, onSelect, listDevices, t }: D
                 <div className={css.deviceDetails}>
                   <div className={css.deviceHeader}>
                     <span className={css.deviceName}>{device.name}</span>
-                    <span className={css.deviceStatus}>
-                      <StateDot state={device.enabled ? 'done' : 'idle'} />
-                      <span className={css.deviceStatusText}>
-                        {device.enabled ? t('devicePicker.statusEnabled') : t('devicePicker.statusDisabled')}
+                    <span className={css.deviceStatuses}>
+                      <span className={css.deviceStatus}>
+                        <StateDot state={device.enabled ? 'done' : 'idle'} />
+                        <span className={css.deviceStatusText}>
+                          {device.enabled ? t('devicePicker.statusActive') : t('devicePicker.statusDisabled')}
+                        </span>
+                      </span>
+                      <span className={css.deviceStatus}>
+                        <StateDot state={connectivityState} />
+                        <span className={css.deviceStatusText}>{connectivityLabel}</span>
+                        {connectivity === 'online' && device.latencyMs !== undefined && (
+                          <span className={css.deviceLatency}>
+                            {t('devicePicker.latency', { ms: device.latencyMs })}
+                          </span>
+                        )}
                       </span>
                     </span>
                   </div>

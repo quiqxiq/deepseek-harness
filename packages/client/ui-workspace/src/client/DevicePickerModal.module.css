@@ -7,8 +7,20 @@
   padding: 0 24px 12px;
 }
 
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .searchInput {
   width: 100%;
+  flex: 1;
+  min-width: 0;
+}
+
+.refreshButton {
+  flex: none;
 }
 
 .deviceList {
@@ -86,6 +98,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .deviceName {
@@ -96,6 +109,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.deviceStatuses {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  flex: none;
 }
 
 .deviceStatus {
@@ -109,6 +133,14 @@
   font-size: 12px;
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.deviceLatency {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
 }
 
 .deviceSub {

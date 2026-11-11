@@ -29,4 +29,29 @@ describe('resolveEnvironment', () => {
     expect(() => resolveEnvironment({}, { POLYGLOT_WS_URL: 'http://127.0.0.1:8080' }))
       .toThrow('wsBaseUrl must use ws: or wss:')
   })
+
+  it('falls back to POLYGLOT_MCP_READ_TOKEN for the inventory and MCP tokens', () => {
+    expect(resolveEnvironment({}, { POLYGLOT_MCP_READ_TOKEN: 'read-secret' })).toEqual({
+      apiBaseUrl: 'http://127.0.0.1:8080',
+      wsBaseUrl: 'ws://127.0.0.1:8080',
+      mcpUrl: 'http://127.0.0.1:8080/mcp',
+      apiToken: 'read-secret',
+      mcpToken: 'read-secret',
+      wsToken: 'read-secret',
+    })
+  })
+
+  it('prefers POLYGLOT_API_TOKEN over the MCP read token for the inventory', () => {
+    expect(resolveEnvironment({}, {
+      POLYGLOT_API_TOKEN: 'api-secret',
+      POLYGLOT_MCP_READ_TOKEN: 'read-secret',
+    })).toEqual({
+      apiBaseUrl: 'http://127.0.0.1:8080',
+      wsBaseUrl: 'ws://127.0.0.1:8080',
+      mcpUrl: 'http://127.0.0.1:8080/mcp',
+      apiToken: 'api-secret',
+      mcpToken: 'read-secret',
+      wsToken: 'read-secret',
+    })
+  })
 })

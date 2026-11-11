@@ -13,10 +13,12 @@ import { applyApprovalGuard } from './approval-guard.ts'
 
 export {
   isReadOnlyTool,
+  isHostShellTool,
+  isFilesystemMutationTool,
   isSystemTool,
   isDeviceTool,
   isDeviceFullAccess,
-  isHostFullAccess,
+  isHostShellAllowed,
   isDangerFullAccess,
   applyApprovalGuard,
 } from './approval-guard.ts'
@@ -55,7 +57,7 @@ export interface Config {
   wsBaseUrl?: string
   /** MCP endpoint. Derived as `<apiBaseUrl>/mcp` when omitted. */
   mcpUrl?: string
-  /** Inventory bearer token. Falls back to `POLYGLOT_API_TOKEN`. */
+  /** Inventory bearer token. Falls back to `POLYGLOT_API_TOKEN`, then `POLYGLOT_MCP_READ_TOKEN`. */
   apiToken?: string
   /** MCP bearer token. Falls back to `POLYGLOT_MCP_TOKEN`. */
   mcpToken?: string
@@ -124,8 +126,8 @@ export function resolveEnvironment(
     ['http:', 'https:'],
     'mcpUrl',
   )
-  const apiToken = config.apiToken ?? env.POLYGLOT_API_TOKEN
-  const mcpToken = config.mcpToken ?? env.POLYGLOT_MCP_TOKEN
+  const apiToken = config.apiToken ?? env.POLYGLOT_API_TOKEN ?? env.POLYGLOT_MCP_READ_TOKEN
+  const mcpToken = config.mcpToken ?? env.POLYGLOT_MCP_TOKEN ?? env.POLYGLOT_MCP_READ_TOKEN
   const wsToken = config.wsToken ?? env.POLYGLOT_WS_TOKEN ?? mcpToken
   return {
     apiBaseUrl: api,

@@ -1,6 +1,6 @@
 /** Device inventory Remote: mapping, bearer forwarding, and typed failures. */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import DeviceController from '../src/index.ts'
 
@@ -55,6 +55,8 @@ describe('DeviceController', () => {
             ssh_port: 22,
             tags: ['core'],
             status: 'active',
+            connectivity: 'online',
+            latency_ms: 12,
           },
           {
             id: 'dev-2',
@@ -63,6 +65,14 @@ describe('DeviceController', () => {
             driver_type: 'generic_switch',
             host: '10.0.0.2',
             enabled: false,
+          },
+          {
+            id: 'dev-3',
+            name: 'Access Point',
+            vendor: 'Ubiquiti',
+            driver_type: 'generic_ap',
+            host: '10.0.0.3',
+            connectivity: 'offline',
           },
         ],
       }),
@@ -80,6 +90,8 @@ describe('DeviceController', () => {
         sshPort: 22,
         tags: ['core'],
         enabled: true,
+        connectivity: 'online',
+        latencyMs: 12,
       },
       {
         id: 'dev-2',
@@ -89,6 +101,16 @@ describe('DeviceController', () => {
         host: '10.0.0.2',
         tags: [],
         enabled: false,
+      },
+      {
+        id: 'dev-3',
+        name: 'Access Point',
+        vendor: 'Ubiquiti',
+        driverType: 'generic_ap',
+        host: '10.0.0.3',
+        tags: [],
+        enabled: false,
+        connectivity: 'offline',
       },
     ])
   })
@@ -112,12 +134,43 @@ describe('DeviceController', () => {
     })
   })
 
+  it('projects one device by identity', async () => {
+    answer = { status: 200, body: JSON.stringify({ devices: [{ id: 'dev-1', name: 'Router' }] }) }
+    await expect(controller().get({ deviceId: 'dev-1' }, new AbortController().signal)).resolves.toEqual({
+      id: 'dev-1',
+      name: 'Router',
+      vendor: '',
+      driverType: '',
+      host: '',
+      tags: [],
+      enabled: false,
+    })
+  })
+
   it('rejects an unknown device with device/not-found', async () => {
     answer = { status: 200, body: JSON.stringify({ devices: [] }) }
     await expect(controller().get({ deviceId: 'missing' }, new AbortController().signal)).rejects.toMatchObject({
       code: 'device/not-found',
       details: { deviceId: 'missing' },
     })
+  })
+
+  it('keeps non-Error transport and body failures readable', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce('socket down')
+    await expect(controller().list(new AbortController().signal)).rejects.toMatchObject({
+      code: 'device/inventory-unavailable',
+      details: { reason: 'socket down' },
+    })
+    fetchSpy.mockRestore()
+
+    const response = new Response('{}', { status: 200 })
+    Object.defineProperty(response, 'json', { value: () => Promise.reject('bad json') })
+    const jsonSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response)
+    await expect(controller().list(new AbortController().signal)).rejects.toMatchObject({
+      code: 'device/inventory-unavailable',
+      details: { reason: 'bad json' },
+    })
+    jsonSpy.mockRestore()
   })
 
   it('rejects an unreachable endpoint and a non-HTTP base URL', async () => {

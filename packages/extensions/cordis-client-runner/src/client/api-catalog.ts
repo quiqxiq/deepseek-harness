@@ -400,8 +400,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Workspace Controller\'s Client service face.',
     methods: [
       {
-        signature: 'create(input: { path: string }): Promise<WorkspaceView>',
-        description: 'Register an existing path as a Workspace.',
+        signature: 'create(input: WorkspaceCreateRequest): Promise<WorkspaceView>',
+        description: 'Register an existing path or inventory device as a Workspace.',
         parameters: [{ name: 'input', description: 'Host create payload.' }],
         returns: 'the created or idempotently resolved Workspace.',
       },
@@ -1100,8 +1100,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type UseFactorySlot<F extends keyof SlotFactoryMap & string> = <N extends FactoryLocalNameOf<F>>(name: N, fallback: FactoryLocalComponent<F, N>) => SlotComponent<FactoryLocalInputPropsOf<F, N>>;',
   },
   {
+    name: 'WorkspaceCreateRequest',
+    declaration: 'export type WorkspaceCreateRequest = {\n    readonly path: string;\n    readonly target?: undefined;\n    readonly title?: string | undefined;\n} | {\n    readonly target: WorkspaceTarget;\n    readonly path?: undefined;\n    readonly title?: string | undefined;\n};',
+  },
+  {
     name: 'WorkspaceView',
-    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly target?: WorkspaceTarget | undefined;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
   },
 ]
 

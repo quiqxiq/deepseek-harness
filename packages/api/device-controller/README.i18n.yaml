@@ -15,14 +15,17 @@
   en: 4e53164159b5ce41
   zh: 89582dc0294d0776
 /deepseek-ai-dsh-api-device-controller/use-this-package:
-  en: dbe30a834c2a201d
-  zh: 818d0b78603c0386
+  en: a3be3f0a141139e2
+  zh: 46383703a82b72fb
 /deepseek-ai-dsh-api-device-controller/model-experience:
-  en: 1653bb1c2893d1d0
-  zh: 024225b7cb537a4d
+  en: f8005e0015f3aca0
+  zh: c7c2ef5d6c0247ef
+/deepseek-ai-dsh-api-device-controller/model-experience/kv-cache-effect:
+  en: ca3015e252db0114
+  zh: 747bd7f936f9348a
 /deepseek-ai-dsh-api-device-controller/known-limitations-and-deferred-work:
-  en: 9ef0ebc0bb70836c
-  zh: 2f75347b5bb5c9bf
-/deepseek-ai-dsh-api-device-controller/dev-note:
-  en: b75c8458928b72b9
-  zh: 003ba4e17b4b5269
+  en: a3d024c28854ed6c
+  zh: 878a050e0cea25e1
+/deepseek-ai-dsh-api-device-controller/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

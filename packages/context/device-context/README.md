@@ -51,13 +51,14 @@ One short context message per injection; not repeated on every step.
 
 The injection appends context after retained history; the stable system-prompt prefix is unchanged.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 - **Directory changes are not followed.** The plugin resolves the Session header's original project directory, so a device Workspace that changes its working directory keeps the target from the original path.
 - **The device record is a snapshot.** Renaming or re-addressing a device in inventory updates the Workspace on the next adoption; an existing Session keeps the injected snapshot until the target changes or the refresh interval elapses.
 
 <a id="dev-note"></a>
-## Dev Note
+### Dev Note
 
 None.

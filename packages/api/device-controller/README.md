@@ -33,21 +33,25 @@ Mount it beside the Workspace controller; the netops profile does this by defaul
     timeoutMs: 10000
 ```
 
-`baseUrl` defaults to the local engine. `token` is sent as a bearer token and never projected. The `devices/list` call answers `{ devices }`; `devices/get` answers one device or `device/not-found`. A transport, status, or decode failure maps to `device/inventory-unavailable` with the base URL and a short reason.
+`baseUrl` defaults to the local engine. `token` is sent as a bearer token and never projected. The `devices/list` call answers `{ devices }`; `devices/get` answers one device or `device/not-found`. Each device carries the inventory's `enabled` and `status` facts plus a live `connectivity` probe (`online`, `offline`, or `unknown` for a disabled device) and `latency_ms` when online. A transport, status, or decode failure maps to `device/inventory-unavailable` with the base URL and a short reason.
 
 <a id="model-experience"></a>
 ## Model Experience
 
-This package contributes no model-visible input; it backs the picker and Workspace creation.
+None, as the Host Remote projects inventory records to the browser and registers no prompt, tool schema, or Session event.
 
-<a id="known-limitations-and-deferred-work"></a>
+#### KV Cache effect
+
+No model request prefix changes.
+
 ## Known Limitations and Deferred Work
 
+<a id="known-limitations-and-deferred-work"></a>
+
 - **Inventory is read-only and uncached.** Every picker open and Workspace adoption performs one HTTP call.
-- **Reachability is not probed.** `enabled` is the inventory's enabled flag, not a live device check; use the device-status tool for liveness.
+- **Connectivity is a TCP dial to the management port, not a protocol handshake.** A device that accepts the socket but rejects the protocol still reports online; use the device-status tool for protocol-level liveness.
 
 <a id="dev-note"></a>
-<a id="dev-note"></a>
-## Dev Note
+### Dev Note
 
 None.
